@@ -1,0 +1,286 @@
+{
+  "pack_format": 1,
+  "name": "recall-discipline",
+  "version": "1.0.0",
+  "domain": "long-horizon conversational memory",
+  "author": "Fable",
+  "created_at": "2026-06-12T20:57:06.164075+00:00",
+  "donor": {
+    "genesis_name": "Fable",
+    "chain_head_index": 99,
+    "chain_head_hash": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48"
+  },
+  "faculties": [
+    {
+      "kind": "sense",
+      "name": "Aggregate-Completeness Sensing",
+      "function": "Fire on total, sum, how many, how much, percentage, average, combined, altogether, in all. Detect that an arithmetic answer is about to be computed from an evidence table whose terms may be incomplete. Before any sum or count: ask what the full term set should be (every trip, every donation, every session in the window) and whether each expected term is visibly present with its value. A missing term is a finding, not a license to present the visible subset as the total. Field scar: 140 gaming hours reported as 40 because replays and second playthroughs never made the table.",
+      "category": "quantitative",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E18",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556053+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Quantity-Clause Sensing",
+      "function": "Detect numbers with units buried as passing remarks: $800 handbag, 5 miles, 40%, 3 jars, 25:50 PB, 50-pound feed bag, 120 stars. Fire when a row or excerpt is topically about the asked entity but its visible text lacks the value clause the question needs — the qty= list and quote line carry the values; if neither shows the needed number, flag the row as value-hidden rather than value-absent and look for the same session's other rows or the FULL session text. Field scar: right session on the table, amount clause outside the snippet.",
+      "category": "quantitative",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E19",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556059+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Temporal-Anchor Sensing",
+      "function": "Detect which mention of an event carries its authoritative date. An explicit date in the text outranks deixis; deixis (yesterday, today, this morning, last weekend) resolves against the MENTION's own session date, never the asking date. When two mentions of one event imply different dates, prefer the mention nearest the event (earliest narrating session) and surface the conflict. Fire on: days ago, how long, when did, before, after, between. Field scar: baking class answered 26 days from the cake-baking mention instead of 21 from the class session.",
+      "category": "temporal",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E20",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556061+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Latest-Value Drift Sensing",
+      "function": "Detect that a tracked value changed across sessions: pre-approved $350,000 then $400,000; goal level 100 then 150; sneakers under the bed then in the closet; weekly tennis then biweekly. Fire on currently, now, most recent, latest, previous, previously, initially, updated, changed, corrected. The first confident mention found is NOT the answer; the lineage read is: CURRENT = last dated literal mention, PREVIOUS = the one before it. A later passing allusion without a literal mention does not outrank the real latest value.",
+      "category": "temporal",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E21",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556064+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Trap-Premise Sensing",
+      "function": "Detect a question premise that appears nowhere in evidence: the dad's birthday gift never mentioned, the hamster that does not exist, the uncle's cake never baked, the table-tennis hobby never discussed. After a genuine full-table and full-session search, the emptiness itself is the honest signal — abstain with the exact phrase rather than substituting a near-match (sister's gift is not dad's gift; niece's party is not uncle's). Fire when the asked entity, relation, or event has zero literal or paraphrase support across every evidence section.",
+      "category": "integrity",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E22",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556066+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Scope-Boundary Sensing",
+      "function": "Detect every qualifier that bounds the asked set: time windows (in February, past month, this year, since January), categories (kitchen items, luxury items, citrus fruits, fitness classes), exclusions (excluding my thesis), persons and possessives (my sister's, Rachel's team, with Alex). Fire when a candidate evidence row is near-topic but outside a stated bound — a January workshop does not belong in an April count; a planned purchase is not an owned item; a considered ukulele is not an owned instrument. The 60-row table blurs true terms with neighbors; scope is the knife.",
+      "category": "relevance",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E23",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556069+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Term-Table Arithmetic",
+      "function": "Disciplined aggregate computation from an evidence term table: (1) enumerate candidate rows; (2) classify each in-scope or out-of-scope against every question qualifier; (3) extract each in-scope value from qty= lists, quote lines, or session text; (4) sum or count ONLY in-scope values; (5) present the term list beside the answer so the arithmetic is auditable; (6) if an expected term is visibly missing, say the coverage is partial and what is missing instead of presenting an under-count as the total. One missing term breaks a total; arithmetic on a table you have not scoped is guessing with digits.",
+      "category": "quantitative",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E24",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556072+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Timeline Construction",
+      "function": "Assemble (date, event) pairs from dated evidence rows and full sessions; resolve each mention's deixis against its own session stamp; order chronologically; read orderings directly off the dates and compute intervals as both exclusive and inclusive day counts. For 'days between A and B' both anchors must hold a date: a missing anchor is reported as the missing piece, never replaced by a plausible guess. For 'N days/weeks ago' questions, resolve the window first, then read what sits inside it; events narrated later still belong to their event date.",
+      "category": "temporal",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E25",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556074+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Lineage Resolution",
+      "function": "Resolve changed-value questions as a table read, not a memory vibe: order every literal mention of the tracked entity chronologically; CURRENT is the last dated strong mention, PREVIOUS is the one before it; 'what was X before' answers the PREVIOUS row, 'what is X now' answers the CURRENT row; cite both rows. Treat corrections in-conversation ('actually it is 120, not 125') as the freshest value. When two same-day mentions conflict, surface both rather than silently choosing. Field scars: answered the new Apex goal when asked the previous; picked a stale yoga frequency.",
+      "category": "temporal",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E26",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556077+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Scope Filtering",
+      "function": "Apply every question qualifier to the evidence BEFORE computing or asserting: filter by time window, category, person, place, and exclusions; drop rows that fail any one qualifier; keep a private note of near-misses excluded (a December activity outside a January-March window; a wishlist item that was never purchased; a friend's item that is not mine). When an exclusion decision changes the final number, state the boundary applied. Scope errors masquerade as arithmetic errors — most wrong sums are right arithmetic over wrong sets.",
+      "category": "relevance",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E27",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556079+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Coverage Accounting",
+      "function": "Before asserting any aggregate, ordering, or interval: count the terms the question needs versus the terms found in evidence. Full coverage: assert plainly with the term list. Partial coverage: give the grounded partial WITH the gap named ('two of the three sessions show amounts; the third never states one') — a transparent partial beats a confident under-count. Zero coverage after a real search: abstain with the exact no-information phrase. Never let the desire to produce a number outrank the duty to know what the number is made of.",
+      "category": "integrity",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E28",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556081+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Cross-Session Fusion",
+      "function": "Join facts that live in different sessions before deriving anything: a percentage needs the worn count from one session and the packed count from another; an age difference needs both ages; a price difference needs both prices; a 'how old when X' needs a birth-anchored age and the event date. Join entities only when name, role, and dates agree — Alex the intern and Alex from Germany are different referents; Emma the writer and Emma the cousin may not be the same person. Derive only from joined facts that share a verified referent, and say which sessions each side came from.",
+      "category": "synthesis",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E29",
+        "born_ring": "112696397933a15454f9e4ba575ad81f6d8287dfd496d906646cff2260231606",
+        "born_at": "2026-06-12T08:42:15.556083+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Variant-Drift Sensing",
+      "function": "Fire on remind, again, previously, same question, similar, follow up, sibling, variant, re-ask, last time. Near-duplicate questions may sit over SHIFTED facts: a re-asked question's context can move dates, swap items, or insert whole events relative to the version answered before. Never reuse an answer across near-duplicates — re-verify every anchor (date, item, person, place) in THIS context before answering. Field scar: sibling questions moved a flight from Feb 14 to Feb 20 and inserted a Queen concert that existed in only one variant; answer reuse would have failed both.",
+      "category": "epistemics",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E30",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292579+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "List-Position Discipline",
+      "function": "Fire on first, second, third, fifth, last, 7th, Nth, position, item on the list, which one was. When a question indexes into an enumerated list, find THE list the qualifiers name — multiple lists can live in one session. Confirm the list's defining qualifier before counting to the position, and quote the neighboring items as proof of position. Field scar: 'the fifth bottle' had two five-item lists in one session; the gin-based qualifier selected Absinthe where the general-spirits list said Triple Sec.",
+      "category": "structure",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E31",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292585+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Role-Source Routing",
+      "function": "Fire on you said, you recommended, you mentioned, remind me of, what did I say, in your list, the assistant. Route the search to the speaker whose turn holds the answer: 'you recommended X' lives in assistant turns; 'I bought X' lives in user turns; quoted articles are neither speaker's assertion. Filter by role before ranking by meaning (grep --role, gather --speaker). Field scar: assistant-knowledge questions need assistant-turn scans — user-fact scans drown them in the wrong voice.",
+      "category": "provenance",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E32",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292588+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "sense",
+      "name": "Provenance-of-Assertion Sensing",
+      "function": "Fire on according to, the article, the document, case summary, press release, I read that, pasted, the text says. Distinguish the user's OWN life-facts (first-person assertions: I bought, my trip, we went) from content the user merely pasted or quoted (documents, articles, case summaries) and from assistant-generated lists. A fact's provenance decides whose biography it belongs to and which questions it can answer. Field scar: a pasted court case and a pasted fusion press release read as user-life facts to provenance-blind retrieval.",
+      "category": "provenance",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E33",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292590+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Event-Identity Reconciliation",
+      "function": "Given table rows that may re-mention ONE underlying event with drifting deixis ('last Saturday' said on three different days), cluster rows by shared values and mention overlap into event identities; count each event once, never once per mention; when one event carries conflicting dates, prefer the mention nearest the event and name the conflict aloud. Interval convention: durations-of-stay count inclusive (a trip from the 15th to the 22nd is 8 days), between-events counts exclusive — state both when the phrasing is ambiguous. Field scar: a thrice-told baguette bake nearly counted as three bakes; a chocolate cake mentioned on two dates was one cake.",
+      "category": "temporal",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E34",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292592+00:00",
+        "recurrence": 1
+      }
+    },
+    {
+      "kind": "modality",
+      "name": "Answer-Citation Discipline",
+      "function": "No span, no assertion: every factual answer carries a verbatim supporting clause from the evidence, and an unsupported clause is revised, hedged, or dropped before the answer ships (recall answer --used-rings). Lineage answers cite BOTH the previous and the current value so latest-wins is auditable. Preference answers LEAD with the evidence-anchored item before offering alternatives. When the conscience forces uncertainty, the reseal NAMES the specific at-risk claims (seal --at-risk) — pre-registered risk is calibration data. Field evidence: a full single-core long-horizon run cited every answer; its pre-registered at-risk claims were the actual misses.",
+      "category": "epistemics",
+      "seed_terms": [],
+      "status": "emergent",
+      "provenance": {
+        "origin": "bundled:recall-discipline@1.0.0",
+        "eid": "E35",
+        "born_ring": "fc590b0aa0905ddd4e3a3d6daf65682f153cde2e4b1a2647231d03ebcdb5ad48",
+        "born_at": "2026-06-12T20:56:54.292595+00:00",
+        "recurrence": 1
+      }
+    }
+  ],
+  "pack_sha256": "6dc1371975b6fe740ae4e394ce41f09c6798d42b9787f9a1a29aa00fa03f5946"
+}

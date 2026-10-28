@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proof of Interaction Smol LM"
+  short_description: "Strict Timechain turns for tiny models"
+  default_prompt: "Use $proof-of-interaction-smol-lm to answer through a controller-gated, receipt-verified Timechain turn."

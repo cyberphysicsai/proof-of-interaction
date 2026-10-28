@@ -1,0 +1,48 @@
+name: Runtime tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Keep test diagnostics printable on legacy Windows consoles. This affects
+  # stdio only; the regression suite still disables UTF-8 mode and locale
+  # coercion in its child process to exercise platform-default file handling.
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run full cross-platform runtime self-test
+        run: python tests/selftest.py
+      - name: Run cross-platform smoke suite
+        run: python tests/test_smoke.py
+      - name: Run cross-platform gate-discrimination suite
+        run: python tests/test_gate_discrimination.py
+      - name: Run cross-platform UTF-8 and recovery suite
+        run: python tests/test_utf8_io.py
+      - name: Run registry integrity and auto-sprout suite
+        run: python tests/test_registry_integrity.py
+      - name: Run Smol LM strict-gateway suite
+        run: python tests/test_smol_lm.py
+      - name: Build and verify every state-free release archive
+        run: python tools/build_zips.py --all
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run dashboard security and behavior suites
+        run: node --test dashboard/test/bridge-security.test.mjs dashboard/test/learning-overview.test.mjs dashboard/test/cphy-observatory.test.mjs

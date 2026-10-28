@@ -1,0 +1,21 @@
+{
+  "name": "proof-of-interaction-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first Proof of Interaction Timechain dashboard and private local bridge with no accounts, wallets, payments, or outbound calls.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "bridge": "node server.mjs",
+    "check": "node --check server.mjs && node --check public/app.js",
+    "test:security": "node --test test/bridge-security.test.mjs",
+    "test:learning": "node --test test/learning-overview.test.mjs",
+    "test:cphy": "node --test test/cphy-observatory.test.mjs",
+    "test": "node --test test/bridge-security.test.mjs test/learning-overview.test.mjs test/cphy-observatory.test.mjs"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=20"
+  }
+}
