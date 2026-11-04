@@ -1,20 +1,20 @@
 /** Real native paid-profile defaults must never bill a proxy-owned child. */
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import http from 'node:http';import {once} from 'node:events';import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
 import {createOpenClawGateway} from '../openclaw/gateway.mjs';import {createPoIBroker} from '../openclaw/broker.mjs';import {engine} from '../lib/engine.mjs';import {DIMENSIONS,FRUITS} from '../lib/providers.mjs';import {controlSessionKey} from '../lib/openclaw-controls.mjs';import {currentCanonicalSkill} from '../lib/canonical-skill.mjs';
+import {createMixedRouteResponsePlan,parentDirective} from './fixtures/mixed-route-response-plan.mjs';
 const packageRoot=process.env.CT_OPENCLAW_PACKAGE,nodePath=process.env.CT_OPENCLAW_NODE;
 test('actual native paid default cannot replace Free or BYOK child transport, and native mode still works',{
  skip:!packageRoot||!nodePath?'Set the reviewed native package and Node paths.':false,timeout:420000,
 },async t=>{
  const directory=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'ct-mixed-route-'))),root=path.join(directory,'parent');
  const canonicalSkill=(await currentCanonicalSkill()).skill,answer='I can help with care and honesty.';
- const calls=[],diagnostics=[],children=new Map(),spawned=new Set(),registrations=[];let manager,broker,phase='setup',activeProxy;
+ const calls=[],diagnostics=[],children=new Map(),responsePlan=createMixedRouteResponsePlan(),registrations=[];let manager,broker,phase='setup',activeProxy;
  const provider=http.createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw),native=req.url.startsWith('/native/');
   const text=(body.messages||[]).map(message=>typeof message.content==='string'?message.content:JSON.stringify(message.content)).join('\n');
   calls.push({phase,native,canonical:text.includes(canonicalSkill),privateMarker:raw.includes('[CHAINCHAT_PRIVATE_MODEL_ROUTE:'),model:body.model,auth:req.headers.authorization});
-  const spawn=!native&&!spawned.has(phase)&&(body.messages||[]).some(message=>message.role==='user'&&JSON.stringify(message.content).includes('CT_PARENT_SPAWN'));
-  if(spawn)spawned.add(phase);
-  const delta=spawn?{role:'assistant',tool_calls:[{index:0,id:'mixedspawn'+phase,type:'function',function:{name:'sessions_spawn',arguments:JSON.stringify({task:'CT_CHILD_TASK_'+phase+': Please say you can help with care and honesty.',runtime:'subagent',agentId:'main',model:'fixture-native/paid',mode:'run',cleanup:'keep'})}}]}:{role:'assistant',content:answer};
+  const spawn=responsePlan.next(body.messages,{native});
+  const delta=spawn?{role:'assistant',tool_calls:[{index:0,id:'mixedspawn'+spawn,type:'function',function:{name:'sessions_spawn',arguments:JSON.stringify({task:'CT_CHILD_TASK_'+spawn+': Please say you can help with care and honesty.',runtime:'subagent',agentId:'main',model:'fixture-native/paid',mode:'run',cleanup:'keep'})}}]}:{role:'assistant',content:answer};
   res.writeHead(200,{'content-type':'text/event-stream'});res.write(`data: ${JSON.stringify({id:'mixed-route',choices:[{index:0,delta,finish_reason:null}]})}\n\n`);res.end(`data: ${JSON.stringify({id:'mixed-route',choices:[{index:0,delta:{},finish_reason:spawn?'tool_calls':'stop'}],usage:{prompt_tokens:20,completion_tokens:10,total_tokens:30}})}\n\ndata: [DONE]\n\n`);
  });provider.listen(0,'127.0.0.1');await once(provider,'listening');
  t.after(async()=>{await manager?.close();await broker?.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));assert.ok(directory.startsWith(await fs.realpath(os.tmpdir())+path.sep));await fs.rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:150});});
@@ -40,7 +40,7 @@ test('actual native paid default cannot replace Free or BYOK child transport, an
   for(const selected of ['free','byok']){
    phase=selected;activeProxy={provider:'compatible',tier:selected,model:'proxy-fixture',baseUrl:base+'/proxy/v1',apiKey:selected==='free'?'chainchat-free-tier':'synthetic-byok-route-key',contextWindow:131072,maxOutputTokens:4096};
    const input='CT_PARENT_SPAWN: Start the requested native child task, then say you can help with care and honesty.';
-   const parent=await manager.generate(activeProxy,{messages:[{role:'user',content:input}],maxTokens:512,nativeControl:{kind:'message',sessionKey:controlSessionKey(identity)}},context(input));
+   const parent=await manager.generate(activeProxy,{system:parentDirective(selected),messages:[{role:'user',content:input}],maxTokens:512,nativeControl:{kind:'message',sessionKey:controlSessionKey(identity)}},context(input));
    assert.equal(parent.text,answer);assert.equal(parent.enforcement.reviewed,true);manager.resumeNativeSources();
    const deadline=Date.now()+60000;let accepted=false;
    while(Date.now()<deadline){for(const child of children.values())if(child.phase===selected){const state=await engine({op:'inspect',root:child.root,registryRoot:child.root,learning:false});if(state.verified&&state.head.index>=1)accepted=true;}if(accepted)break;await new Promise(resolve=>setTimeout(resolve,100));}

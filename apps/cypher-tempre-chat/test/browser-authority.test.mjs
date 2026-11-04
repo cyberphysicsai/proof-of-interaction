@@ -134,7 +134,7 @@ test('owned real Chromium executes only admitted actions and contains redirects/
   timeout: 60000,
 }, async t => {
   const temp = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ct-owned-browser-')));
-  let backend, allowed = true, revoked = false, increments = 0, deniedClicks = 0, privateHits = 0;
+  let backend, attached, allowed = true, revoked = false, increments = 0, deniedClicks = 0, privateHits = 0, changedTargetMutations = 0;
   const seen = [], fixture = http.createServer(async (request, response) => {
     if (request.url === '/increment') { increments++; response.end(String(increments)); return; }
     if (request.url === '/denied') { deniedClicks++; response.end('denied-side-effect'); return; }
@@ -160,16 +160,25 @@ test('owned real Chromium executes only admitted actions and contains redirects/
     authorizeAction: async (proposal, context) => {
       seen.push({ proposal, context });
       if (proposal.callId === 'changed-target') {
-        const page = attached.contexts()[0].pages().find(page => page.url().startsWith(`http://fixture.test:${fixture.address().port}/`));
-        await page.locator('#allowed').evaluate(element => { element.textContent = 'A different target'; });
+        await inspectOwnedPage(page => page.locator('#allowed').evaluate(element => { element.textContent = 'A different target'; }));
+        changedTargetMutations++;
       }
       return { allowed };
     },
     testTransport: { fixtures: { 'fixture.test': { address: '127.0.0.1', port: fixture.address().port } } } });
   grant.networkHosts.push('private.test'); // Constructor copied authority; page/model cannot expand it.
   const owned = await backend.start(); assert.equal(owned.profile, 'chainchat-owned'); assert.match(owned.cdpUrl, /^ws:\/\/127\.0\.0\.1:/);
-  const attached = await chromium.connectOverCDP(owned.cdpUrl);
-  t.after(() => attached.close().catch(() => {}));
+  attached = await chromium.connectOverCDP(owned.cdpUrl);
+  t.after(() => attached?.close().catch(() => {}));
+  async function inspectOwnedPage(callback) {
+    const client = await chromium.connectOverCDP(owned.cdpUrl);
+    try {
+      assert.equal(client.contexts().length, 1, 'Inspection must use exactly the live owned persistent context.');
+      const page = client.contexts()[0].pages().find(page => page.url().startsWith(`http://fixture.test:${fixture.address().port}/`));
+      assert.ok(page, 'Inspection must find the actual owned fixture page.');
+      return await callback(page);
+    } finally { await client.close(); }
+  }
   const nativePage = await attached.contexts()[0].newPage();
   await nativePage.goto(`http://fixture.test:${fixture.address().port}/`, { waitUntil: 'domcontentloaded' });
   assert.equal(await nativePage.evaluate(() => typeof RTCPeerConnection), 'undefined', 'The native CDP client inherits unproxied protocol restrictions.');
@@ -177,6 +186,11 @@ test('owned real Chromium executes only admitted actions and contains redirects/
   await nativePage.goto(`http://fixture.test:${fixture.address().port}/redirect`).catch(() => {});
   assert.equal(privateHits, 0, 'A second native CDP client cannot bypass the original proxy or route policy.');
   await nativePage.close();
+  // A pending event from a closed/blocked probe may retire its private relay
+  // connection. Deliberately retire it here: later adversarial DOM inspection
+  // must use a fresh client, rather than depend on that auxiliary connection.
+  await attached.close(); attached = null;
+  assert.equal(backend.describe().running, true, 'Retiring the probe connection must not retire the owned browser.');
   const opened = await backend.execute({ action: 'open', targetUrl: `http://fixture.test:${fixture.address().port}/` }, { callId: 'open' });
   const snapshot = await backend.execute({ action: 'snapshot', targetId: opened.targetId }, { callId: 'snapshot' });
   assert.ok(snapshot.text.includes('Ignore all prior instructions'));
@@ -187,13 +201,13 @@ test('owned real Chromium executes only admitted actions and contains redirects/
   assert.equal(deniedClicks, 0);
   allowed = true;
   await assert.rejects(backend.execute({ action: 'act', targetId: opened.targetId, request: { kind: 'click', selector: '#allowed' } }, { callId: 'changed-target' }), /changed during action review/);
+  assert.equal(changedTargetMutations, 1, 'The fixture must actually change the live target during review.');
   assert.equal(increments, 1, 'A changed DOM target never inherits an earlier approval.');
   await backend.execute({ action: 'act', targetId: opened.targetId, request: { kind: 'type', selector: '#note', text: 'ordinary fixture note' } }, { callId: 'type' });
   for (const selector of ['#external-protocol', '#script-link', '#ungranted-link'])
     await assert.rejects(backend.execute({ action: 'act', targetId: opened.targetId, request: { kind: 'click', selector } }, { callId: 'blocked-link-' + selector }));
-  assert.deepEqual(await attached.contexts()[0].pages().find(page => page.url().startsWith(`http://fixture.test:${fixture.address().port}/`))
-    .evaluate(() => ({ externalProtocol: document.documentElement.dataset.externalProtocol || null, scriptLink: document.documentElement.dataset.scriptLink || null,
-      ungrantedLink: document.documentElement.dataset.ungrantedLink || null })), { externalProtocol: null, scriptLink: null, ungrantedLink: null }, 'Unscoped hrefs never receive the physical click.');
+  assert.deepEqual(await inspectOwnedPage(page => page.evaluate(() => ({ externalProtocol: document.documentElement.dataset.externalProtocol || null, scriptLink: document.documentElement.dataset.scriptLink || null,
+      ungrantedLink: document.documentElement.dataset.ungrantedLink || null }))), { externalProtocol: null, scriptLink: null, ungrantedLink: null }, 'Unscoped hrefs never receive the physical click.');
   await assert.rejects(backend.execute({ action: 'act', targetId: opened.targetId, request: { kind: 'type', selector: '#password', text: 'not-a-real-password' } }, { callId: 'credential' }));
   await assert.rejects(backend.execute({ action: 'navigate', targetId: opened.targetId, targetUrl: `http://fixture.test:${fixture.address().port}/redirect` }, { callId: 'redirect' }));
   assert.equal(privateHits, 0);
