@@ -10,7 +10,7 @@ establish benchmark parity, perfect security or elimination of hallucinations.
 ## Source and runtime identity
 
 The packaged PoI fallback is the complete 69-file canonical OpenClaw skill bundle
-at `87adbdb74db1ca8cb35e57d5042de22c4bed3348`, with matching Git blobs, file modes
+at `3834ab95f5af7ce48dcc22ede120133393fcbc6f`, with matching Git blobs, file modes
 and SHA-256 manifest. The fixed-publisher skill updater verifies candidate Git
 objects, tests compatibility and switches between turns while preserving user
 chains, registries and approvals. Git hashes establish the publisher snapshot;
@@ -22,6 +22,14 @@ repeated actual dreams, preserved history, all five runtime copies, and genuine/
 experience remaining eligible. No PoI floor or chain format changes. The earlier local
 observations below retain their original source scope; they are not fresh acceptance of
 this corrected bundle. Exact final-source CI and installer evidence remain required.
+
+Canonical `PoI.py` also matches complete typed specifics instead of incidental
+substrings. The bridge regression creates a valid fixed-clock genesis whose hash
+contains `875`: that hash cannot support an invented measurement of `875` in
+`document.txt`, while the complete identity hash and supported perspective limit
+remain grounded. Numeric, version, identifier and filename/path boundaries are covered
+by the canonical regression. This establishes lexical support, not semantic entailment,
+and leaves the existing score floor and enforcement policy unchanged.
 
 The OpenClaw runtime is pinned to **2026.10.10** and portable Node to
 **26.13.0**. Its original npm archive keeps the published SRI. The extracted

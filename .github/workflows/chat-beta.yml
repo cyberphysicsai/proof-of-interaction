@@ -76,7 +76,7 @@ jobs:
         run: npm ci --ignore-scripts && npm run check
         working-directory: apps/cypher-tempre-chat
       - name: Run the complete Node suite with serial native runtime ownership
-        run: node --test --test-concurrency=1 test/*.test.mjs && npm run test:engine
+        run: npm run test:engine && node --test --test-concurrency=1 test/*.test.mjs
         working-directory: apps/cypher-tempre-chat
       - name: Verify earlier-engine compatibility from an exact independent public source
         shell: bash

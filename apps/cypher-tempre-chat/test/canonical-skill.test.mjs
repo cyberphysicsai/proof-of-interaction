@@ -57,7 +57,7 @@ async function fixture(t, changes = {}, options = {}) {
 }
 test('packaged engine is the immutable official canonical commit, not a divergent copy', async () => {
   const snapshot = await packagedSkillBundle();
-  assert.equal(snapshot.commit, '87adbdb74db1ca8cb35e57d5042de22c4bed3348');
+  assert.equal(snapshot.commit, '3834ab95f5af7ce48dcc22ede120133393fcbc6f');
   assert.equal(Object.keys(snapshot.files).length, 69);
   assert.ok(snapshot.skill.includes('name: proof-of-interaction'));
   await assert.rejects(withCanonicalSkill({ ...snapshot }, () => {}), { code: 'SKILL_INTEGRITY' });

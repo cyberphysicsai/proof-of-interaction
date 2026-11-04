@@ -221,35 +221,63 @@ def measure_grounding(cand: set, support: set) -> int:
 # verbatim against the declared evidence — the most dangerous hallucinations are
 # invented specifics, and this is the microscope that sees them.
 _SPECIFIC = re.compile(
-    r"(\d[\d,.]*%?"                       # numbers / percents
-    r"|[\w./-]+\.(?:py|md|json|jsonl|js|sh|txt|yml|yaml|toml)"  # filenames
-    r"|[a-z_][a-z0-9_]*\(\)"              # function() references
-    r"|[A-Z][A-Z0-9_]{2,}"                # CONSTANTS / env flags
-    r"|v\d+\.\d+(?:\.\d+)?"              # versions
-    r")")
+    # Consume complete compounds before numbers: a hash/identifier/version is
+    # not evidence for an unrelated measurement containing one of its digits.
+    r"(?P<hash>(?<!\w)[a-fA-F0-9]{64}(?!\w))"
+    r"|(?P<version>(?<![\w.])[vV]\d+(?:\.\d+)+(?:[-+][\w.-]+)?(?!\w|\.\w|[-+]\w))"
+    r"|(?P<file>(?<![\w./\\-])(?:[a-zA-Z]:)?[\w./\\-]+\."
+    r"(?i:py|md|jsonl?|js|sh|txt|ya?ml|toml)[\w./\\-]*(?![\w./\\-]))"
+    r"|(?P<function>(?<!\w)[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*\(\)(?!\w))"
+    r"|(?P<identifier>(?<![\w.-])[\w.-]*[a-zA-Z_][\w.-]*(?![\w.-]))"
+    r"|(?P<number>(?<![\w.])[+-]?(?:\d[\d,]*(?:\.\d+)*|\.\d+)%?(?![\w%]|[.,]\d))"
+)
+
+
+def _specific_tokens(text, all_identifiers=False):
+    out, seen = [], set()
+    for match in _SPECIFIC.finditer(text or ""):
+        kind, value = match.lastgroup, match.group(0).rstrip(",.")
+        # Plain prose is not a claim-bearing identifier. Still consume it as a
+        # whole token, and retain it in evidence for case-insensitive CONSTANTS.
+        specific = (kind != "identifier" or all_identifiers or value.isupper()
+                    or "_" in value or any(char.isdigit() for char in value))
+        token = (kind, value)
+        if specific and len(value) > 1 and token not in seen:
+            out.append(token)
+            seen.add(token)
+    return out
 
 
 def extract_specifics(text: str) -> list:
     """Claim-bearing specifics: numbers, filenames, function refs, constants,
     versions. Short/trivial matches (single digits used as list markers) are kept
     — conservatively — only when len > 1."""
-    out = []
-    for m in _SPECIFIC.finditer(text or ""):
-        s = m.group(0).strip(",.")
-        if len(s) > 1 and s not in out:
-            out.append(s)
-    return out
+    return list(dict.fromkeys(value for _, value in _specific_tokens(text)))
 
 
 def entity_grounding(candidate: str, evidence_text: str):
-    """Fraction of the candidate's specifics that appear VERBATIM in the evidence,
+    """Fraction of the candidate's complete typed specifics found in the evidence,
     scaled 0-255. Returns (score, missing:list, total:int). No specifics -> (255, [], 0)
-    — nothing to fabricate. Case-insensitive; commas in numbers folded."""
-    specs = extract_specifics(candidate)
+    — nothing to fabricate. Case-insensitive; commas in numbers folded. A bare
+    filename may cite the exact basename of a complete evidence path; a qualified
+    candidate path must match the complete path. This is lexical, not entailment.
+    """
+    specs = _specific_tokens(candidate)
     if not specs:
         return 255, [], 0
-    ev = (evidence_text or "").lower().replace(",", "")
-    missing = [s for s in specs if s.lower().replace(",", "") not in ev]
+    def normalized(kind, value):
+        value = value.lower().replace(",", "")
+        return value.replace("\\", "/") if kind == "file" else value
+    evidence = {(kind, normalized(kind, value))
+                for kind, value in _specific_tokens(evidence_text, all_identifiers=True)}
+    basenames = {value.rsplit("/", 1)[-1] for kind, value in evidence if kind == "file"}
+    missing = []
+    for kind, value in specs:
+        normalized_value = normalized(kind, value)
+        basename = (kind == "file" and "/" not in normalized_value
+                    and not re.match(r"^[a-z]:", normalized_value))
+        if (kind, normalized_value) not in evidence and not (basename and normalized_value in basenames):
+            missing.append(value)
     score = clamp(255 * (len(specs) - len(missing)) / len(specs))
     return score, missing, len(specs)
 
