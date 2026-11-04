@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ownedBrowserProfilesResult, sanitizeOwnedBrowserResult } from '../openclaw/plugin/browser-results.mjs';
+import { ownedBrowserProfilesResult, sanitizeOwnedBrowserResult, createOwnedBrowserResultMiddleware } from '../openclaw/plugin/browser-results.mjs';
 
 test('profiles are projected only from actual owned authority facts without claiming personal inventory', () => {
   const native = { profile: 'chainchat-owned', isolated: true, running: true, closed: false, networkHosts: ['example.com'], network: [],
@@ -60,4 +60,33 @@ test('profile dictionaries and page-controlled special keys cannot expose other 
   assert.deepEqual(result.details.profiles, { 'chainchat-owned': { running: true } });
   assert.equal(Object.getPrototypeOf(result.details), Object.prototype);
   assert.equal(Object.hasOwn(result.details, '__proto__'), true); assert.equal({}.title, undefined);
+});
+
+test('pre-model middleware reduces the live browser result independently of its persisted copy', () => {
+  let privateValue = '/private/first-owned-profile';
+  const middleware = createOwnedBrowserResultMiddleware(() => [privateValue]);
+  const raw = { content: [{type: 'text', text: JSON.stringify({targetId: 'actual-target', url: 'about:blank',
+    wsUrl: 'ws://127.0.0.1:18000/devtools/page/actual-target?token=synthetic-private-capability',
+    note: privateValue})}], details: {ok: true}, terminate: false };
+  const untouched = structuredClone(raw);
+  const result = middleware({toolName: 'browser', toolCallId: 'actual-call', args: {action: 'open'}, result: raw}, {runtime: 'openclaw'}).result;
+  assert.deepEqual(raw, untouched, 'The live receipt is reduced by return value, without rewriting source observations.');
+  assert.equal(JSON.stringify(result).includes('synthetic-private-capability'), false);
+  assert.equal(JSON.stringify(result).includes(privateValue), false);
+  assert.equal(JSON.parse(result.content[0].text).targetId, 'actual-target');
+  assert.deepEqual(result.details, {ok: true}); assert.equal(result.terminate, false);
+  privateValue = '/private/replaced-owned-profile';
+  assert.equal(middleware({toolName: 'browser', result: {content: [{type: 'text', text: privateValue}]}}, {runtime: 'openclaw'})
+    .result.content[0].text, '[private browser control]', 'Private values are read at the current boundary, not captured stale.');
+  for (const override of [{toolName: 'read', runtime: 'openclaw'}, {toolName: 'browser', runtime: 'codex'}, {toolName: 'browser', runtime: 'agentsapi'}])
+    assert.equal(middleware({toolName: override.toolName, result: raw}, {runtime: override.runtime}), undefined);
+});
+
+test('malformed live browser output becomes a fixed unconfirmed error without private content', () => {
+  const middleware = createOwnedBrowserResultMiddleware(() => []), raw = {details: {secret: 'must-not-escape'}};
+  raw.circular = raw;
+  const held = middleware({toolName: 'browser', result: raw}, {runtime: 'openclaw'}).result;
+  assert.equal(held.isError, true); assert.deepEqual(held.details, {status: 'error'});
+  assert.equal(JSON.stringify(held).includes('must-not-escape'), false);
+  assert.match(held.content[0].text, /Completion is unconfirmed/);
 });

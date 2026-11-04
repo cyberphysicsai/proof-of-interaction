@@ -66,8 +66,8 @@ jobs:
           printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile chainchat-ci-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' "$browser" | sudo tee "$profile" >/dev/null
           echo "installed=true" >> "$GITHUB_OUTPUT"
           sudo apparmor_parser -a "$profile"
-      - name: Exercise browser containment and fallback denial before the full suite
-        run: npm ci --ignore-scripts && npm run check && node --test --test-concurrency=1 test/openclaw-native-browser.integration.test.mjs test/openclaw-legacy-compaction.integration.test.mjs
+      - name: Install and check application
+        run: npm ci --ignore-scripts && npm run check
         working-directory: apps/cypher-tempre-chat
       - name: Run the complete Node suite with serial native runtime ownership
         run: node --test --test-concurrency=1 test/*.test.mjs && npm run test:engine

@@ -97,3 +97,17 @@ export function sanitizeOwnedBrowserResult(result, { privateValues = [] } = {}) 
   };
   return reduce(result);
 }
+
+/** The persistence hook does not replace the current native tool-loop result.
+ * Use the published pre-model middleware for that separate live boundary. */
+export function createOwnedBrowserResultMiddleware(privateValues) {
+  if (typeof privateValues !== 'function') throw fail();
+  return (event, context) => {
+    if (event?.toolName !== 'browser' || context?.runtime !== 'openclaw') return;
+    try { return { result: sanitizeOwnedBrowserResult(event.result, { privateValues: privateValues() }) }; }
+    catch {
+      return { result: { isError: true, details: { status: 'error' }, content: [{ type: 'text',
+        text: 'The browser result was withheld because its private control details could not be safely reduced. Completion is unconfirmed.' }] } };
+    }
+  };
+}

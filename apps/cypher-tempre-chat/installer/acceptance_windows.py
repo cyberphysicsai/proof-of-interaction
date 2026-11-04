@@ -43,15 +43,20 @@ def main():
     if args.cache_dir:
         flags += ["--cache-dir", str(args.cache_dir.resolve())]
 
-    def run(label, expect=0, extra=None):
+    def run(label, expect=0, extra=None, timeout=5400):
         result = work / (label + ".json")
         command = flags + (extra or []) + ["--result-file", str(result)]
-        completed = subprocess.run(command, timeout=5400, creationflags=subprocess.CREATE_NO_WINDOW)
+        completed = subprocess.run(command, timeout=timeout, creationflags=subprocess.CREATE_NO_WINDOW)
         data = json.loads(result.read_text(encoding="utf-8"))
         if completed.returncode != expect or data.get("ok") is not (expect == 0):
             raise RuntimeError(label + " failed: " + json.dumps(data))
         return data
 
+    invalid_root = work / ("invalid-installation-" + "p" * 121)
+    invalid = run("invalid-install-root", expect=1,
+                  extra=["--install-root", str(invalid_root)], timeout=30)
+    if invalid_root.exists() or target.exists():
+        raise RuntimeError("Refused installation path created installation state.")
     first = run("first-install")
     active_file = target / "current.json"
     active = json.loads(active_file.read_text(encoding="utf-8"))
@@ -239,7 +244,9 @@ def main():
         raise RuntimeError("Rollback rewrote existing data.")
     self_test = run("executable-self-test", extra=["--self-test"])
     report = {"installerSha256": digest(installer), "installedVersion": active["version"],
-        "root": str(target), "firstInstall": first["ok"], "repeatInstall": second["ok"],
+        "root": str(target), "invalidPathReportedWithoutUi": not invalid["ok"],
+        "invalidPathCreatedNoInstallationState": True,
+        "firstInstall": first["ok"], "repeatInstall": second["ok"],
         "nativeEngineVerified": verified["verified"], "existingChainBytesPreserved": True,
         "userDataBytesPreserved": True, "tamperedCandidateHeld": not held["ok"],
         "activePointerPreservedOnFailure": True, "rollbackPreservedData": rollback["ok"],

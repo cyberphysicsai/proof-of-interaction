@@ -3,7 +3,7 @@ import { createReviewedContextEngine } from './compaction.mjs';
 import { createNativeCompactionStats, COMPACTION_STATS_METHOD } from './compaction-stats.mjs';
 import { createGuardedContextFactory, ENFORCEMENT_HEALTH_METHOD } from './context-guard.mjs';
 import { createChannelHooks } from './channels.mjs';
-import { sanitizeOwnedBrowserResult } from './browser-results.mjs';
+import { sanitizeOwnedBrowserResult, createOwnedBrowserResultMiddleware } from './browser-results.mjs';
 import { managedServicesFactory } from './services.mjs';
 import { registerNativeCompletion } from './native-completion.mjs';
 import { registerNativeMedia } from './native-media.mjs';
@@ -373,9 +373,14 @@ export function register(api) {
     catch { respond(false, undefined, { code: 'INVALID_REQUEST', message: 'Native compaction metadata is unavailable for this exact session.' }); }
   }, { scope: 'operator.admin', profileAccess: 'independent' });
   api.registerTool(managedServicesFactory(request), { name: 'chainchat_automation' });
-  const hooks = createEnforcementHooks(request, { browserPrivateValues: () => [config.brokerToken,
+  const browserPrivateValues = () => [config.brokerToken,
     ...Object.entries(process.env).filter(([key]) => /^CHAINCHAT_(?:GATEWAY_TOKEN|PROVIDER_TOKEN|BROKER_TOKEN|CHANNEL_[A-F0-9]{32}_[A-Z0-9_]+)$/.test(key)).map(([, value]) => value),
-    ...Object.values(api.config?.browser?.profiles || {}).map(profile => profile?.cdpUrl)].filter(Boolean) });
+    ...Object.values(api.config?.browser?.profiles || {}).map(profile => profile?.cdpUrl)].filter(Boolean);
+  if (typeof api.registerAgentToolResultMiddleware !== 'function')
+    throw new TypeError('The published native pre-model browser result boundary is required.');
+  api.registerAgentToolResultMiddleware(createOwnedBrowserResultMiddleware(browserPrivateValues),
+    { runtimes: ['openclaw'], matcher: ['browser'] });
+  const hooks = createEnforcementHooks(request, { browserPrivateValues });
   const channels = createChannelHooks(request, { channelIds: () => Object.entries(api.config?.channels || {})
     .filter(([, value]) => value && value.enabled !== false).map(([id]) => id) });
   for (const name of ['message_sending', 'reply_payload_sending']) {

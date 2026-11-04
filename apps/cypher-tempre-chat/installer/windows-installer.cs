@@ -70,8 +70,9 @@ namespace CypherTempreInstaller {
   public sealed class Options {
     public string root, cache, resultFile;
     public bool quiet, noLaunch, noShortcuts, launch, rollback, selfTest;
-    public static Options Parse(string[] args) {
-      Options value = new Options();
+    public static Options Parse(string[] args, Options value) {
+      // Preserve reporting options when validation refuses an installation.
+      value.quiet = Array.IndexOf(args, "--quiet") >= 0;
       value.root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CypherTempre", "ChainChat");
       for (int i = 0; i < args.Length; i++) {
         switch(args[i]) {
@@ -515,9 +516,9 @@ namespace CypherTempreInstaller {
     [STAThread] static int Main(string[] args) {
       AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);
       AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);
-      Options options=null;
+      Options options=new Options();
       try {
-        options=Options.Parse(args);
+        options=Options.Parse(args, options);
         if(options.quiet || options.launch || options.rollback || options.selfTest) { Installer.Execute(options,delegate{}); return 0; }
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); Application.Run(new InstallForm(options)); return Environment.ExitCode;
       } catch(Exception error) {

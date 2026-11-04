@@ -4,6 +4,9 @@
   "description": "Trusted local turn admission, native context, action review and candidate-bound output receipts.",
   "version": "0.10.0",
   "contracts": {
+    "agentToolResultMiddleware": [
+      "openclaw"
+    ],
     "tools": [
       "chainchat_automation"
     ]

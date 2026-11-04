@@ -116,7 +116,9 @@ test('a failed mandatory native context factory cannot select fallback or persis
     let seed = 0;
     // Establish a native conversation before adding its large older turn. This
     // fixture tests fallback over existing history, not a fresh oversized input.
-    for (const input of ['Please say hello.', 'Please say hello.\n' + 'source-padding '.repeat(18000), 'Please say hello.', 'Please say hello.']) {
+    // Keep both protected recent turns within the seed model's context budget;
+    // the later 48k model, not an oversized seed, creates compaction pressure.
+    for (const input of ['Please say hello.', 'Please say hello.\n' + 'source-padding '.repeat(6000), 'Please say hello.', 'Please say hello.']) {
       phases.push(`seed-${++seed}:started`); assert.equal((await run(input)).text, 'Hello.'); phases.push(`seed-${seed}:accepted`);
       const nativeSession = (await nativeObserver.request('sessions.describe', { key: sessionKey })).session || {};
       seedUsage.push({ seed, totalTokensFresh: nativeSession.totalTokensFresh ?? null,

@@ -264,9 +264,10 @@ test("delivery blocks unsupported media and survives agent_end only with exact r
 });
 
 test("plugin registers all required blocking and delivery hooks against the public API", () => {
-  const registered = [], tools = [], services = [], methods = [];
+  const registered = [], tools = [], services = [], methods = [], middleware = [];
   register({ pluginConfig: { brokerUrl: "http://127.0.0.1:18791/private", brokerToken: token },
     registerTool: (factory, options) => tools.push({ factory, options }),
+    registerAgentToolResultMiddleware: (handler, options) => middleware.push({ handler, options }),
     registerService: service => services.push(service),
     registerGatewayMethod: (name, handler, options) => methods.push({ name, handler, options }),
     on: (name, handler, options) => registered.push({ name, handler, options }) });
@@ -274,6 +275,13 @@ test("plugin registers all required blocking and delivery hooks against the publ
   assert.equal(tools[0].options.name, 'chainchat_automation');
   assert.equal(tools[0].factory.contextVersion, 2);
   assert.equal(tools.length, 1);
+  assert.equal(middleware.length, 1);
+  assert.deepEqual(middleware[0].options, { runtimes: ['openclaw'], matcher: ['browser'] });
+  const reduced = middleware[0].handler({ toolName: 'browser', result: { details: { ok: true, wsUrl: 'ws://127.0.0.1:12345/devtools/private' },
+    content: [{type: 'text', text: token}] } }, { runtime: 'openclaw' }).result;
+  assert.equal(reduced.details.ok, true);
+  assert.equal(JSON.stringify(reduced).includes(token), false);
+  assert.equal(JSON.stringify(reduced).includes('127.0.0.1'), false);
   assert.equal(services.length, 0);
   for (const name of ['chainchat.compactionStats', 'chainchat.enforcementHealth'])
     assert.equal(methods.find(method => method.name === name)?.options.scope, 'operator.admin');
@@ -288,6 +296,15 @@ test("plugin registers all required blocking and delivery hooks against the publ
     'Native durable goals reject all pre-checkpoint takeover hooks even when their handler would decline.');
   assert.ok(registered.some(entry => entry.name === 'message_received'), 'Channel observation cannot acquire native inference authority.');
   assert.ok(registered.every(entry => entry.options.timeoutMs === 410000));
+});
+
+test('a runtime without the pre-model browser reducer API cannot register mandatory enforcement', () => {
+  const registrations = [];
+  assert.throws(() => register({ pluginConfig: { brokerUrl: 'http://127.0.0.1:18791/private', brokerToken: token },
+    registerTool: () => {}, registerGatewayMethod: name => registrations.push(name), on: () => {} }),
+  /pre-model browser result boundary is required/);
+  assert.equal(registrations.includes('chainchat.enforcementHealth'), false,
+    'An unsupported runtime cannot report healthy enforcement with persistence-only browser reduction.');
 });
 
 test("broker credentials stay local and malformed or reflected protocol data is rejected", async t => {
@@ -436,6 +453,7 @@ test('explicit cancellation and late ignored-abort transport results remain refu
 test('broker timeout bounds, manifest schema and derived hook deadlines remain consistent', async () => {
   const config = { brokerUrl: 'http://127.0.0.1:18791/private', brokerToken: token };
   const manifest = JSON.parse(await readFile(new URL('../openclaw/plugin/openclaw.plugin.json', import.meta.url), 'utf8'));
+  assert.deepEqual(manifest.contracts.agentToolResultMiddleware, ['openclaw']);
   assert.deepEqual(manifest.configSchema.properties.requestTimeoutMs, { type: 'integer', minimum: 100, maximum: 240000, default: 200000 });
   assert.equal(manifest.configSchema.additionalProperties, false);
   for (const requestTimeoutMs of [99, 240001, 100.5, '200000', NaN])
@@ -446,7 +464,7 @@ test('broker timeout bounds, manifest schema and derived hook deadlines remain c
   for (const requestTimeoutMs of [100, 200000, 240000]) {
     assert.doesNotThrow(() => createBrokerClient({ ...config, requestTimeoutMs }));
     const deadlines = [];
-    register({ pluginConfig: { ...config, requestTimeoutMs }, registerTool: () => {},
+    register({ pluginConfig: { ...config, requestTimeoutMs }, registerTool: () => {}, registerAgentToolResultMiddleware: () => {},
       registerGatewayMethod: () => {},
       on: (_name, _handler, options) => deadlines.push(options.timeoutMs) });
     assert.ok(deadlines.length > 0);
