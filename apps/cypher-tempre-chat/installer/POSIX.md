@@ -8,6 +8,16 @@ policies differ: a downloaded script may require the normal execute/launch
 confirmation. These packages are unsigned and macOS notarization is not claimed.
 Setup never removes quarantine flags or bypasses Gatekeeper.
 
+Setup displays six numbered stages, from preparation and verified downloads to
+the browser setup guide. In an interactive terminal, press Enter on the welcome
+screen to begin, or Ctrl+C to cancel. Noninteractive and `--quiet` invocations do
+not wait for that input. Progress and the final handoff use stderr; stdout keeps
+the machine-readable JSON result. The final message confirms local runtime
+readiness and explains the remaining browser steps: connect a model, choose a
+fresh or existing Timechain, then check chat readiness. No API key is requested
+in the installer or terminal. `--no-launch` explicitly reports that startup has
+not been checked and points to the installed application shortcut.
+
 Both packages detect ARM64 or x64 and download exact SHA-256-pinned Node
 26.13.0 and portable CPython 3.12.16 runtimes. Python comes from the reviewed
 Astral python-build-standalone 20261026 release. No system Node/Python, Homebrew,
@@ -67,7 +77,7 @@ relaunch without replacing a live matching runtime. It does not report success
 merely because Node was spawned, and it never kills another program to obtain a
 port. Quiet CI mode reports a nonzero failure/result file; desktop launches show
 a safe error where the OS's dialog tools are available. Cold startup has a bounded
-four-minute readiness window for Gateway startup and local restoration. An
+fifteen-minute readiness window for storage checks, offline upgrades and Gateway startup. An
 exited child still fails immediately, and only its authenticated owned runtime
 can report readiness. Logs stay in the private installation. Quitting the browser
 does not stop the local runtime.
@@ -85,7 +95,7 @@ mutations or an arbitrary schema downgrade.
 From the application directory:
 
 ```sh
-python3 installer/build_posix.py --archive /reviewed/cypher-tempre-chat-v0.10.0.zip --output-dir /reviewed/setup --platform all
+python3 installer/build_posix.py --archive /reviewed/cypher-tempre-chat-v0.10.1.zip --output-dir /reviewed/setup --platform all
 ```
 
 The builder reads bootstrap/installer sources and runtime pins from that ZIP,
@@ -102,7 +112,7 @@ only in a synthetic HOME/XDG directory, briefly starts a private local runtime
 with no browser and uses synthetic native-chain data, then authenticates shutdown:
 
 ```sh
-python3 installer/acceptance_posix.py --installer /reviewed/setup/CypherTempre-ChainChat-Setup-0.10.0-linux.tar.gz --work-root /var/tmp/chainchat-acceptance
+python3 installer/acceptance_posix.py --installer /reviewed/setup/CypherTempre-ChainChat-Setup-0.10.1-linux.tar.gz --work-root /var/tmp/chainchat-acceptance
 ```
 
 Use the macOS ZIP path on a macOS runner. Optional `--cache-dir` reuses only

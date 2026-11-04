@@ -31,11 +31,23 @@ cleanup() {
 trap cleanup 0
 trap 'exit 130' 1 2 15
 cache_dir=${CT_INSTALL_CACHE:-}
+setup_quiet=0
 previous=''
 for argument do
   if [ "$previous" = --cache-dir ]; then cache_dir=$argument; fi
+  if [ "$argument" = --quiet ]; then setup_quiet=1; fi
   previous=$argument
 done
+if [ "$setup_quiet" -eq 0 ]; then
+  printf '\nCYPHER TEMPRE CHAINCHAT - GUIDED SETUP\n\n' >&2
+  printf 'Step 1/6: Prepare your local installation\n' >&2
+  printf 'Setup installs verified runtimes and the local agent for your user.\nThen the browser guide helps connect a model, choose a Timechain and check chat readiness.\nNo administrator access is needed. First setup needs Internet access and may take several minutes.\nKeep API keys in the browser model connection screen.\n\n' >&2
+  if [ -t 0 ]; then
+    printf 'Press Enter to begin, or Ctrl+C to cancel: ' >&2
+    IFS= read -r setup_answer
+  fi
+  printf '\nStep 2/6: Prepare the verified portable Python runtime\n' >&2
+fi
 if [ -z "$cache_dir" ]; then
   if [ "$platform" = darwin ]; then cache_dir="$HOME/Library/Caches/CypherTempre/downloads";
   else cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/CypherTempre/downloads"; fi

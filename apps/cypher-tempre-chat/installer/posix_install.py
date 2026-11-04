@@ -31,6 +31,29 @@ MAX_ARCHIVE = 1024**3
 PRIVATE = {'.git', '.local', 'node_modules', '__pycache__', 'chain', 'tasks'}
 
 
+def setup_stage(args, number, message):
+    """Human progress stays off the machine-readable result stream."""
+    if not args.quiet:
+        print(f'\nStep {number}/6: {message}', file=sys.stderr, flush=True)
+
+
+def setup_handoff(args):
+    if args.quiet:
+        return
+    if args.no_launch:
+        text = ('Installation files verified. The runtime was not started (--no-launch).\n'
+                'Open Cypher Tempre ChainChat from your applications menu to finish setup.')
+    else:
+        text = ('Step 6/6: Finish setup in the browser\n'
+                'Your local runtime is ready. The browser setup guide will help you:\n'
+                '  1. Connect an available free model or your own model/API.\n'
+                '  2. Create a fresh Timechain or select an existing one.\n'
+                '  3. Check that the model, Timechain and Proof of Interaction are ready.\n'
+                'Chat is ready when that guide confirms it.\n'
+                'If no browser appeared, open Cypher Tempre ChainChat from your applications menu.')
+    print('\n' + text + '\nKeep API keys in the model connection screen, not this terminal.\n', file=sys.stderr, flush=True)
+
+
 def sha256(filename):
     digest = hashlib.sha256()
     with open(filename, 'rb') as stream:
@@ -311,6 +334,7 @@ def shortcuts(root, python):
 
 
 def install(args):
+    setup_stage(args, 3, 'Install your private local agent and verified runtimes')
     bundle = args.bundle.resolve()
     manifest = json.loads((bundle / 'manifest.json').read_text(encoding='utf-8'))
     key = runtime_key()
@@ -382,6 +406,7 @@ def install(args):
         active = {'product': 'cypher-tempre-chainchat', 'version': manifest['version'], 'platform': key,
             'release': str(release), 'node': str(node_home / 'bin/node'), 'python': str(python_home / 'bin/python3'),
             'data': str(data), 'payloadSha256': manifest['payloadSha256']}
+        setup_stage(args, 4, 'Check OpenClaw, Proof of Interaction and the installed runtime')
         run_checked([active['node'], release / 'openclaw/launcher.mjs', '--check'], active, root / 'install.log', 120)
         current_file = root / 'current.json'
         if current_file.exists():
@@ -393,7 +418,11 @@ def install(args):
         atomic_file(root / 'launcher.py', (release / 'installer/posix_install.py').read_bytes(), 0o700)
         atomic_json(current_file, active)
         if not args.no_shortcuts: shortcuts(root, python_home / 'bin/python3')
-    if not args.no_launch: launch(root, args.quiet)
+    if not args.no_launch:
+        setup_stage(args, 5, 'Start the local runtime and open your private chat')
+        if not args.quiet:
+            print('First startup or a storage upgrade may take several minutes. Keep setup open while it checks readiness.', file=sys.stderr, flush=True)
+        launch(root, args.quiet)
     return {'ok': True, 'version': manifest['version'], 'platform': key, 'root': str(root),
         'release': str(release), 'data': str(data), 'sourceVerified': True, 'runtimeVerified': True,
         'ready': not args.no_launch, 'shortcutsCreated': not args.no_shortcuts}
@@ -448,6 +477,7 @@ def main():
         else:
             if not args.bundle or not args.bootstrap_python: parser.error('A verified setup bundle and bootstrap runtime are required.')
             result = install(args)
+            setup_handoff(args)
         if args.result_file: atomic_json(args.result_file, result)
         print(json.dumps(result))
     except Exception as error:

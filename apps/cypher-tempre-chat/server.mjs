@@ -52,6 +52,7 @@ import {createNativeOutputMedia} from './lib/native-output-media.mjs';
 import {NativeCompletions} from './lib/native-completions.mjs';
 import {NativeOwnerStore} from './lib/native-owner-store.mjs';
 import {NativeMediaStore} from './lib/native-media-store.mjs';
+import {setupReadiness} from './lib/setup-readiness.mjs';
 
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const APP_VERSION = JSON.parse(
@@ -2044,6 +2045,28 @@ export async function createApp(options = {}) {
           }
           if (req.method === "GET" && url.pathname === "/api/state")
             return send(200, await state(session));
+          if (req.method === 'GET' && url.pathname === '/api/setup/readiness') {
+            // Inspect without state()'s equipment repair or any learning write.
+            // A check never starts/restarts the Gateway; neither this check nor
+            // a catalogue listing tests an inference key.
+            const selectedAgentId = session.agentId;
+            const record = store.agents.find(agent => agent.id === selectedAgentId);
+            const provider = session.provider;
+            const freeTier = provider?.tier === 'free' ? await modelCatalogue.freeTier({refresh: true}) : null;
+            let inspected = null, timechainError = null;
+            if (record) {
+              try { inspected = await engine({op: 'inspect', root: record.root, learning: false}); }
+              catch { timechainError = true; }
+            }
+            await requireLocalAccess();
+            // A stale check must not certify a model or chain switched while
+            // its asynchronous verification/catalogue request was pending.
+            if (session.provider !== provider || session.agentId !== selectedAgentId)
+              throw err('Setup changed during this check. Check readiness again.', 'SETUP_CHANGED', 409);
+            return send(200, setupReadiness({runtime: openclaw ? openclaw.status() : {backend: 'direct'},
+              provider: cleanProvider(provider), agent: inspected, agentId: record?.id, selected: !!record,
+              canonicalSkill: canonicalSkills.describe(), freeTier, timechainError}));
+          }
           if (req.method === "POST" && url.pathname === "/api/agents/discover")
             return send(200, await discoverTimechains({ agentDataRoot: store.root }));
           if (req.method === "GET" && url.pathname === "/api/activity") {

@@ -69,7 +69,7 @@ namespace CypherTempreInstaller {
   }
   public sealed class Options {
     public string root, cache, resultFile;
-    public bool quiet, noLaunch, noShortcuts, launch, rollback, selfTest;
+    public bool quiet, noLaunch, noShortcuts, launch, rollback, selfTest, guided;
     public static Options Parse(string[] args, Options value) {
       // Preserve reporting options when validation refuses an installation.
       value.quiet = Array.IndexOf(args, "--quiet") >= 0;
@@ -98,16 +98,22 @@ namespace CypherTempreInstaller {
   }
   public sealed class InstallForm : Form {
     readonly Label heading = new Label();
+    readonly Label steps = new Label();
+    readonly Label guidance = new Label();
     readonly TextBox log = new TextBox();
     readonly ProgressBar progress = new ProgressBar();
     readonly Button finish = new Button();
+    readonly Button close = new Button();
     readonly PrivateFontCollection fonts = new PrivateFontCollection();
     IntPtr fontMemory = IntPtr.Zero;
     readonly Options options;
+    enum Page { Welcome, Installing, Installed, Failed }
+    Page page = Page.Welcome;
     public InstallForm(Options value) {
       options = value;
+      options.guided = true;
       Text = "Cypher Tempre ChainChat Setup";
-      Width = 720; Height = 480; MinimumSize = new Size(540, 360);
+      Width = 790; Height = 600; MinimumSize = new Size(680, 530);
       BackColor = Color.Black; ForeColor = Color.White;
       using(Stream source=Assembly.GetExecutingAssembly().GetManifestResourceStream("font.ttf")) {
         if(source != null) using(MemoryStream buffer=new MemoryStream()) {
@@ -117,40 +123,65 @@ namespace CypherTempreInstaller {
         }
       }
       StartPosition = FormStartPosition.CenterScreen;
-      heading.Text = "CYPHER TEMPRE CHAINCHAT\r\nInstalling your local OpenClaw runtime";
-      heading.SetBounds(24, 20, 660, 55); heading.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+      heading.Text = "CYPHER TEMPRE CHAINCHAT\r\nWelcome to guided setup";
+      heading.SetBounds(24, 20, 725, 55); heading.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+      steps.Text = "1  PREPARE     2  INSTALL     3  CHECK     4  CONTINUE";
+      steps.SetBounds(24, 88, 725, 28); steps.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+      guidance.Text = "Install locally, then finish choosing your model and Timechain in the browser.";
+      guidance.SetBounds(24, 123, 725, 48); guidance.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
       log.Multiline = true; log.ReadOnly = true; log.ScrollBars = ScrollBars.Vertical;
       log.BackColor = Color.FromArgb(18,18,18); log.ForeColor = Color.White;
-      log.SetBounds(24, 88, 655, 260); log.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-      progress.Style = ProgressBarStyle.Marquee; progress.SetBounds(24, 365, 655, 16);
+      log.SetBounds(24, 180, 725, 260); log.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+      log.Text = "This wizard will:\r\n\r\n1. Prepare a private installation for your Windows account.\r\n2. Install verified Node, Python, OpenClaw and Proof of Interaction.\r\n3. Check the local runtime before handing you to the browser.\r\n4. Guide you through model connection, a fresh or existing Timechain, and chat readiness.\r\n\r\nInstall location:\r\n" + options.root + "\r\n\r\nFirst setup needs Internet access and may take several minutes. No administrator access is required. Keep API keys in the model connection screen; this installer never asks for them.";
+      progress.Style = ProgressBarStyle.Continuous; progress.SetBounds(24, 458, 725, 16);
       progress.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-      finish.Text = "Installing..."; finish.Enabled = false; finish.SetBounds(520, 395, 160, 30);
-      finish.Anchor = AnchorStyles.Bottom | AnchorStyles.Right; finish.Click += delegate { Close(); };
-      Controls.AddRange(new Control[] {heading, log, progress, finish});
-      Shown += async delegate { await Run(); };
-      FormClosing += delegate(object sender, FormClosingEventArgs e) { if(!finish.Enabled) e.Cancel=true; };
+      close.Text = "Cancel"; close.SetBounds(380, 493, 170, 36); close.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+      close.Click += delegate { Close(); };
+      finish.Text = "Install ChainChat"; finish.SetBounds(565, 493, 185, 36);
+      finish.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+      finish.Click += async delegate { if(page == Page.Welcome) await Run(); else if(page == Page.Installed && !options.noLaunch) await OpenSetup(); else Close(); };
+      Controls.AddRange(new Control[] {heading, steps, guidance, log, progress, close, finish});
+      AcceptButton = finish; CancelButton = close;
+      FormClosing += delegate(object sender, FormClosingEventArgs e) { if(page == Page.Installing) e.Cancel=true; };
     }
     protected override void Dispose(bool disposing) {
       base.Dispose(disposing);
       if(disposing) { fonts.Dispose(); if(fontMemory != IntPtr.Zero) {Marshal.FreeCoTaskMem(fontMemory);fontMemory=IntPtr.Zero;} }
     }
     async Task Run() {
+      page = Page.Installing; finish.Enabled = false; close.Enabled = false; finish.Text = "Installing...";
+      heading.Text = "CYPHER TEMPRE CHAINCHAT\r\nInstalling your local agent";
+      guidance.Text = "Keep this window open. Progress and any recovery instructions appear below.";
+      log.Clear(); progress.Style = ProgressBarStyle.Marquee;
       try {
         await Task.Run(delegate { Installer.Execute(options, AddLog); });
-        heading.Text = "CYPHER TEMPRE CHAINCHAT\r\nInstallation complete";
+        page = Page.Installed;
+        heading.Text = "CYPHER TEMPRE CHAINCHAT\r\n" + (options.noLaunch ? "Installation complete" : "Your local runtime is ready");
+        guidance.Text = options.noLaunch ? "Open the ChainChat shortcut when you are ready to finish model and Timechain setup." : "Continue in the browser to connect a model, choose your Timechain and check chat readiness.";
+        steps.Text = "1  DONE        2  DONE        3  DONE        4  CONTINUE";
+        AddLog(options.noLaunch ? "Installed without starting the runtime (--no-launch). Model and Timechain setup is still needed." : "Runtime check passed. Select Open setup to finish the browser guide. Chat is ready only after that guide confirms it.");
         progress.Style = ProgressBarStyle.Continuous; progress.Value = 100;
-        finish.Text = "Close"; finish.Enabled = true;
+        finish.Text = options.noLaunch ? "Finish" : "Open setup"; finish.Enabled = true; close.Text = "Close"; close.Enabled = true;
       } catch (Exception error) {
+        page = Page.Failed;
         Installer.RecordResult(options, false, error.Message);
         AddLog("Installation held: " + error.Message);
         heading.Text = "CYPHER TEMPRE CHAINCHAT\r\nSetup needs attention";
+        guidance.Text = "Chat readiness has not been confirmed. Review the message below, then rerun setup after resolving it.";
         progress.Style = ProgressBarStyle.Continuous;
-        finish.Text = "Close"; finish.Enabled = true;
+        finish.Text = "Close"; finish.Enabled = true; close.Visible = false;
         Environment.ExitCode = 1;
       }
     }
+    async Task OpenSetup() {
+      page = Page.Installing;
+      finish.Enabled = false; close.Enabled = false; finish.Text = "Opening...";
+      try { await Task.Run(delegate { Installer.OpenInstalled(options); }); page = Page.Installed; Close(); }
+      catch(Exception error) { page = Page.Installed; AddLog("Could not open setup: " + error.Message); guidance.Text = "Reopen the ChainChat Start Menu shortcut to finish setup. Your installation remains selected."; finish.Text = "Open setup"; finish.Enabled = true; close.Enabled = true; }
+    }
     void AddLog(string message) {
       if (InvokeRequired) { BeginInvoke((Action<string>)AddLog, message); return; }
+      if(message.StartsWith("Step ",StringComparison.Ordinal)) steps.Text = message;
       log.AppendText(message + Environment.NewLine);
     }
   }
@@ -341,10 +372,11 @@ namespace CypherTempreInstaller {
         }
       } catch { return false; } // A partial ownership write or starting control server is retried.
     }
-    static void Launch(ActiveRelease active, string root) {
+    static void Launch(ActiveRelease active, string root, bool deferBrowser = false) {
       ValidateRelease(active, root);
       ProcessStartInfo info = new ProcessStartInfo(active.node, Quote(Path.Combine(active.release,"openclaw","launcher.mjs"))) { WorkingDirectory = active.release, UseShellExecute = false, CreateNoWindow = true };
       foreach(KeyValuePair<string,string> item in EnvironmentFor(active, root)) info.EnvironmentVariables[item.Key] = item.Value;
+      if(deferBrowser) info.EnvironmentVariables["CT_CHAT_NO_BROWSER"] = "1";
       string failure="ChainChat could not start its local runtime. See "+Path.Combine(active.data,"launcher.log")+" for diagnostics. Check whether the local port is already in use, then open ChainChat again.";
       Process child;
       try { child=Process.Start(info); } catch { throw new InvalidOperationException(failure); }
@@ -367,6 +399,9 @@ namespace CypherTempreInstaller {
       }
       // Never kill an old bridge, an unrelated process, or pending native work.
       throw new InvalidOperationException(failure);
+    }
+    public static void OpenInstalled(Options options) {
+      Launch(ReadRelease(Path.Combine(options.root,"current.json"),options.root),options.root);
     }
     static void Shortcut(string target, string arguments, string root) {
       string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
@@ -391,6 +426,7 @@ namespace CypherTempreInstaller {
         AtomicJson(previousFile,current); AtomicJson(activeFile,previous);
         if(!options.noLaunch) Launch(previous,root); RecordResult(options,true,"Previous release selected; chain data preserved."); return;
       }
+      Log("Step 1/4: Prepare your private installation");
       if(!Environment.Is64BitOperatingSystem) throw new InvalidOperationException("This installer requires 64-bit Windows.");
       string marker = Path.Combine(root,"installation.json");
       if(Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any() && !File.Exists(marker)) throw new InvalidOperationException("The target is not a recognized ChainChat installation. Choose a new dedicated directory.");
@@ -412,6 +448,7 @@ namespace CypherTempreInstaller {
         string nodeZip = Path.Combine(downloads,Path.GetFileName(new Uri(manifest.node.url).AbsolutePath));
         string pythonZip = Path.Combine(downloads,Path.GetFileName(new Uri(manifest.python.url).AbsolutePath));
         RejectLinks(nodeZip); RejectLinks(pythonZip);
+        Log("Step 2/4: Install verified runtimes and agent software");
         Log("Downloading and verifying Node.js " + manifest.node.version + " from nodejs.org"); Download(manifest.node,nodeZip,options.cache);
         Log("Downloading and verifying CPython " + manifest.python.version + " from python.org"); Download(manifest.python,pythonZip,options.cache);
         string node = Path.Combine(root,"runtimes","node-"+manifest.node.version+"-"+manifest.node.sha256.Substring(0,12));
@@ -447,6 +484,7 @@ namespace CypherTempreInstaller {
           if(Convert.ToString(installedDependency["name"]) != dependency.Key || Convert.ToString(installedDependency["version"]) != dependency.Value) throw new InvalidOperationException("An installed dependency differs from its pinned security override.");
         }
         if(!File.Exists(Path.Combine(release,"installed.json"))) throw new InvalidOperationException("The staged dependency installation is incomplete; preserve install.log and select a fresh installation root or retry a repaired release.");
+        Log("Step 3/4: Check Node, Python, OpenClaw and Proof of Interaction");
         Log("Checking bundled Node, Python and ChainChat runtime");
         Run(active.node,new[]{"--version"},release,EnvironmentFor(active,root),30);
         Run(active.python,new[]{"-c","import sys,json,hashlib,pathlib,subprocess; import engine_bridge; print('Python and native engine ready')"},release,EnvironmentFor(active,root),30);
@@ -463,7 +501,7 @@ namespace CypherTempreInstaller {
         if(!String.Equals(Assembly.GetExecutingAssembly().Location,launcher,StringComparison.OrdinalIgnoreCase)) File.Copy(Assembly.GetExecutingAssembly().Location,launcher,true);
         if(!options.noShortcuts) { Shortcut(launcher,"--launch --install-root "+Quote(root),root); if(File.Exists(previousFile)) Shortcut(launcher,"--rollback --install-root "+Quote(root),root); }
         Log("Installation complete. Existing data and external Timechain directories were preserved.");
-        if(!options.noLaunch) { Log("Starting ChainChat"); Launch(active,root); }
+        if(!options.noLaunch) { Log("Step 4/4: Start the local runtime for browser setup"); Log("Starting ChainChat"); Launch(active,root,options.guided); }
         RecordResult(options,true,"ChainChat installed; existing data preserved.");
       }
     }
