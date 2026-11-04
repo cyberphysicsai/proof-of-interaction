@@ -322,7 +322,18 @@ class EngineBridgeTests(unittest.TestCase):
             self.assertTrue(any("aggregate_min_terms 5" in reason for reason in verdict["reasons"]))
         self.assertEqual(tc.rings_path.read_bytes(), before)
 
+    def hash_collision_agent(self):
+        self.root = Path(self.temp.name) / "hash-collision-agent"
+        with patch.object(sys.modules[bridge.Timechain.__module__], "now_iso",
+                          return_value="2026-11-04T00:00:00.000426+00:00"):
+            self.call("init", name="Test Agent")
+        genesis_hash = next(bridge.Timechain(self.root).iter_rings())["ring_hash"]
+        self.assertEqual(genesis_hash, "99b55f8a258bc875a0d54c2bed427b8cae660242f6e19c1a67805adee92d40ae")
+        self.assertIn("875", genesis_hash)
+        return genesis_hash
+
     def test_armed_entity_grounding_cannot_use_prompt_metadata_as_evidence(self):
+        self.hash_collision_agent()
         tc = bridge.Timechain(self.root)
         evidence = tc.seal("experience", {"summary": "A measurement in metres was recorded in a document."},
                            poi=self.exchange()["scores"])
@@ -330,6 +341,7 @@ class EngineBridgeTests(unittest.TestCase):
             json.dumps({"floors": {"entity_grounding_enforce": True}}), encoding="utf-8")
         exchange = self.exchange(input="Summarize the measurement reported in the evidence.",
                                  output="The measurement was 875 metres in document.txt.")
+        before = tc.rings_path.read_bytes()
         for used in ([], [evidence["index"]]):
             with self.assertRaises(bridge.BridgeError) as rejected:
                 self.call("evaluate", **exchange, usedRings=used,
@@ -338,6 +350,23 @@ class EngineBridgeTests(unittest.TestCase):
             self.assertEqual(verdict["decision"], "FORCE_UNCERTAINTY")
             self.assertEqual(verdict["entity_grounding"], 0)
             self.assertEqual(set(verdict["specifics_missing"]), {"875", "document.txt"})
+        self.assertEqual(tc.rings_path.read_bytes(), before)
+
+    def test_armed_entity_grounding_supports_complete_identity_hash_and_capacity(self):
+        genesis_hash = self.hash_collision_agent()
+        tc = bridge.Timechain(self.root)
+        before = tc.rings_path.read_bytes()
+        (self.root / "registry" / "policy.json").write_text(
+            json.dumps({"floors": {"entity_grounding_enforce": True}}), encoding="utf-8")
+        output = ("My canonical genesis identity hash is " + genesis_hash
+                  + ". The interface supports up to 21 Chronosynaptic perspectives.")
+        self.assertEqual(bridge.poi.extract_specifics(output), [genesis_hash, "21"])
+        result = self.call("evaluate", **self.exchange(input="Please introduce yourself.", output=output))
+        self.assertEqual(result["verdict"]["decision"], "SEAL")
+        self.assertEqual(result["verdict"]["entity_grounding"], 255)
+        self.assertEqual(result["verdict"]["specifics_total"], 2)
+        self.assertEqual(result["usedRings"], [])
+        self.assertEqual(tc.rings_path.read_bytes(), before)
 
     def test_declared_evidence_comes_from_canonical_records_and_is_sealed(self):
         tc = bridge.Timechain(self.root)

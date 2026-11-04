@@ -3,7 +3,7 @@
 ChainChat uses the maintained source at
 [cyberphysicsai/proof-of-interaction](https://github.com/cyberphysicsai/proof-of-interaction),
 not a separately edited cognitive engine. The packaged 69-file fallback exactly matches
-the official OpenClaw bundle at commit `87adbdb74db1ca8cb35e57d5042de22c4bed3348`.
+the official OpenClaw bundle at commit `3834ab95f5af7ce48dcc22ede120133393fcbc6f`.
 The updater selects that same official bundle from `skills/openclaw/proof-of-interaction`.
 ChainChat's adapter and mandatory host policy remain separate from those files.
 
@@ -12,6 +12,11 @@ autobiographies, calibrations and faculty/custody maintenance do not count as fr
 experience. Those records remain in history and recall; genuine new experience and
 custom experience types remain eligible. The five maintained runtime bundles share
 the same correction. No chain format migration is introduced.
+
+Canonical entity grounding compares complete typed tokens. Digits inside an identity
+hash or a different number, version or identifier cannot support a claimed measurement.
+Complete identity hashes and exact filename/path citations remain usable. This checks
+lexical support, not semantic entailment; PoI floors and enforcement remain unchanged.
 
 Installed startup checks the fixed publisher's `main` channel. Idle operations recheck at
 most hourly. A discovered commit is resolved once; intermediate Git trees and each
