@@ -25,6 +25,7 @@ import {createNativeHeartbeatScratch,readNativeHeartbeatMonitor} from '../lib/na
 import {waitForNativeSessionIdle} from '../lib/native-session-idle.mjs';
 import {assertRuntimeCompatibility} from './runtime-compatibility.mjs';
 import {modelRouteForConfig} from './plugin/model-route.mjs';
+import {prepareNativeUpgrade,completeNativeUpgrade} from './native-upgrade.mjs';
 
 import { CONTEXT_POLICY } from './plugin/compaction.mjs';
 
@@ -355,7 +356,7 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
   const nativeEvents = new Set();
   const nativeCredentialValues=new Set(),sensitiveNativeWizards=new Set();
   const dynamicInvocations = new Map(), pendingDynamic = new Map(), routeInvocations = new Map(),dynamicRows=new Set();
-  let nativeSourcesReady=!deferNativeSources,resolveNativeReadiness;
+  let nativeSourcesReady=!deferNativeSources,resolveNativeReadiness,nativeUpgrade;
   const nativeReadiness=new Promise(resolve=>{resolveNativeReadiness=resolve;});
   if(nativeSourcesReady)resolveNativeReadiness(true);
   const nativeIdentityKeys = new Set();
@@ -513,6 +514,9 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       await stopping;
       await initializeModelCapabilities(); await initializeNativeProviders();
       if (closed) throw fail("This OpenClaw manager is closed.", "OPENCLAW_CLOSED");
+      // Capture an old native installation before any supervisor configuration
+      // overlay is written. Current/fresh state never runs Doctor.
+      nativeUpgrade ||= await prepareNativeUpgrade({directory,packageRoot:upstream,nodePath,onDiagnostic});
       identity ||= await supervisorIdentity(directory);
       gatewayToken = identity.gatewayToken; proxyToken = identity.proxyToken;
       const runtimeState = path.join(directory, "native-state");
@@ -616,6 +620,14 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       const serviceEnv = serviceEnvironmentSnapshot();
       Object.assign(environment, serviceEnv.values);
       Object.assign(environment,nativeSecretProjection.environment);
+      await completeNativeUpgrade(nativeUpgrade,{environment,reprojectManagedConfiguration:async()=>{
+        const info=await fs.lstat(configPath);
+        if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.size>4*1024*1024)throw fail('Native configuration ownership changed.','MIGRATION_FAILED');
+        const repaired=JSON.parse(await fs.readFile(configPath,'utf8'));
+        if(repaired.meta&&typeof repaired.meta==='object'&&!Array.isArray(repaired.meta)&&Buffer.byteLength(JSON.stringify(repaired.meta))<=16384)
+          configuration.meta=structuredClone(repaired.meta);
+        await atomicJson(configPath,configuration);
+      }});
       const bootstrap = 'import { pathToFileURL } from "node:url"; process.on("message", message => { if (message?.type === "chainchat:shutdown") { process.emit("SIGTERM"); if (process.connected) process.disconnect(); } }); await import(pathToFileURL(process.argv[1]).href);';
       if (closed) throw fail("This OpenClaw manager is closed.", "OPENCLAW_CLOSED");
       child = spawnImpl(nodePath, ["--input-type=module", "--eval", bootstrap, path.join(upstream, "openclaw.mjs"), "gateway", "run", "--port", String(port), "--bind", "loopback"],

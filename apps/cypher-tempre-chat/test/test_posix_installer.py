@@ -129,7 +129,7 @@ class PortableInstallerGuards(unittest.TestCase):
         self.assertEqual({pair['node']['version'] for pair in pins.values()}, {'26.13.0'})
 
     def test_front_door_allows_slow_owned_readiness_but_holds_wrong_owner_and_early_exit(self):
-        for scenario in ('slow-owned', 'wrong-owner', 'child-failed', 'reused-owner'):
+        for scenario in ('slow-owned', 'migration-owned', 'wrong-owner', 'child-failed', 'reused-owner'):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix='ct-launch-grace-') as temporary:
                 directory = Path(temporary)
                 (directory / 'current.json').write_text('{}', encoding='utf-8')
@@ -144,6 +144,8 @@ class PortableInstallerGuards(unittest.TestCase):
                 def owner(*_):
                     if scenario == 'slow-owned':
                         return {'pid': 42} if elapsed[0] >= 210 else None
+                    if scenario == 'migration-owned':
+                        return {'pid': 42} if elapsed[0] >= 600 else None
                     return {'pid': 99} if scenario in ('wrong-owner', 'reused-owner') else None
 
                 with (mock.patch.object(installer, 'fcntl', mock.Mock(LOCK_EX=2)),
@@ -153,15 +155,15 @@ class PortableInstallerGuards(unittest.TestCase):
                       mock.patch.object(installer, 'authenticated_status', side_effect=owner),
                       mock.patch.object(installer.time, 'monotonic', side_effect=lambda: elapsed[0]),
                       mock.patch.object(installer.time, 'sleep', side_effect=sleep)):
-                    if scenario in ('slow-owned', 'reused-owner'):
+                    if scenario in ('slow-owned', 'migration-owned', 'reused-owner'):
                         result = installer.launch(directory, quiet=True)
                         self.assertTrue(result['ready'])
                         self.assertEqual(result['reused'], scenario == 'reused-owner')
-                        self.assertEqual(elapsed[0], 210 if scenario == 'slow-owned' else 0)
+                        self.assertEqual(elapsed[0], {'slow-owned': 210, 'migration-owned': 600}.get(scenario, 0))
                     else:
                         with self.assertRaisesRegex(RuntimeError, 'did not become ready'):
                             installer.launch(directory, quiet=True)
-                        self.assertEqual(elapsed[0], 240 if scenario == 'wrong-owner' else 0)
+                        self.assertEqual(elapsed[0], 900 if scenario == 'wrong-owner' else 0)
                     child.kill.assert_not_called()
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX permission ownership guard')

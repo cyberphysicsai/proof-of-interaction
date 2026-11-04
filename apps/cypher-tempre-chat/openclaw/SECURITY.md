@@ -101,6 +101,26 @@ with zero lockfile findings would not itself prove embedded copies are fixed.
 
 ## Native controls and explicit local tools
 
+The native upgrade adapter recognizes only the reviewed shared-state 20-to-22
+and agent-state 25-to-27 transitions. It checks regular-file ownership, schema
+metadata and integrity using disposable copies, then retains a checksummed raw
+backup before supervisor configuration changes. The backup includes the whole
+owned OpenClaw directory, authentication and managed workspace notes. Only
+derived workspace/plugin skill links are recorded as link metadata; their
+targets are not copied. Other links and hardlinks are refused.
+
+Backup directories disable inherited Windows access and grant only the current
+owner, SYSTEM and Administrators, or use owner-only POSIX permissions. This is
+filesystem protection, not encryption. The fixed offline Doctor invocation
+uses the exact pinned runtime, noninteractive repair without force, external
+service-repair policy, and scoped state/configuration. No model request is
+authorized by migration. Unexpected findings retain the hold; failures retain
+the backup and an interruption receipt. Managed configuration is reprojected
+after Doctor, and all normal startup and PoI health checks remain required.
+An earlier app pointer cannot make a newer native schema readable by an older
+runtime. Offline recovery must use a compatible runtime and verified native
+backup; the adapter never blindly downgrades a database or replaces a Timechain.
+
 Automatic native utility routing is disabled with `agents.defaults.utilityModel:
 ""`, and native remote memory indexing/search is disabled with
 `memory.search.enabled: false`. Upstream otherwise derives utility models from

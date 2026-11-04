@@ -153,6 +153,21 @@ is outside those hooks. This is not an OS sandbox or a formal truth oracle.
 
 ## Publication requirements and coverage limits
 
+Native database upgrade checks cover fresh/current repair bypass, the recognized
+shared 20-to-22 and agent 25-to-27 transition, private pre-overlay byte backups,
+unknown schema/owner denial, backup/source tampering, interruption holds,
+redacted repair failures and managed configuration restoration. Ten focused
+Windows checks passed, including an actual protected backup DACL and derived-link
+metadata versus unknown-link/hardlink refusal. A separate real pinned Doctor
+proof preserved three native events, session identity, authentication and
+configuration through that schema transition. That standalone proof started no
+Gateway and made no model calls. The actual product Gateway upgrade fixture
+also passed: retained history/authentication, verified pre-overlay backup,
+old-SDK reads of the restored backup, current-state repair bypass and a native
+PoI-reviewed synthetic chat. The final installed upgrade remains a separate
+publication requirement; a fresh installation alone does not establish
+existing-data upgrade readiness.
+
 - Scheduled/native routes and model-route cost isolation must pass against the
   release source. The observed heartbeat success covers its fixture and schedule;
   editor/get/set success alone does not establish all background execution.
