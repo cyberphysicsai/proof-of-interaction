@@ -2133,6 +2133,15 @@ def main():
         check("phase28 UTF-8: persistence/recovery regression suite passes",
               _utf28.returncode == 0)
 
+        _growth = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("test_dream_growth.py"))],
+            capture_output=True, text=True, timeout=120)
+        check("dream: generated maintenance cannot bootstrap growth; new experience still can",
+              _growth.returncode == 0)
+        if _growth.returncode:
+            print(_growth.stdout)
+            print(_growth.stderr)
+
         check("timechain: final verify", tc.verify()[0])
 
         # phase24 — CPHY economic layer + custody/PQ organs run their own

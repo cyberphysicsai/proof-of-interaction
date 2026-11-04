@@ -157,7 +157,10 @@ class Dream:
     # ---- step 3b: label-space growth (Cambium, proposed by clustering) ----
     GROWTH_SKIP_TYPES = {"genesis", "telemetry-digest", "bench", "operator", "dream",
                          "faculty", "faculty-recur", "promotion", "faculty-import",
-                         "faculty-export", "recovery", "quarantine", "dormancy", "resume"}
+                         "faculty-export", "recovery", "quarantine", "dormancy", "resume",
+                         "epoch", "autobiography", "calibration", "cphy-digest",
+                         "faculty-op-proposed", "faculty-activated", "faculty-wake",
+                         "faculty-unlock", "prune"}
 
     def propose_growth(self):
         """A cluster of recent blocks that is TIGHT in embedding space but
@@ -175,6 +178,10 @@ class Dream:
         # propose. Recurrence must mean "this gap keeps arriving in NEW lived
         # experience" — re-clustering the same window every dream would ratchet
         # recurrence to PROMOTE_AT on zero new evidence (proven in review).
+        # Registry epochs, portraits, calibrations and faculty/custody maintenance
+        # are generated artifacts, not new lived evidence. A dream can append
+        # these after this watermark; they must not bootstrap its next faculty.
+        # Other ring types, including custom experiences, remain eligible.
         state = self._state()
         grown_to = state.get("growth_to", 0)
         members, newest = [], grown_to
