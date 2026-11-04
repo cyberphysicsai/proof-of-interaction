@@ -6,7 +6,7 @@ import path from "node:path";
 import http from "node:http";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
-import { createOpenClawGateway, providerRequest, OPENCLAW_VERSION, consumeModelRouteCapability, nativeControlCloseError } from "../openclaw/gateway.mjs";
+import { createOpenClawGateway, providerRequest, OPENCLAW_VERSION, consumeModelRouteCapability, nativeControlCloseError, nativeLifecycleDiagnostic } from "../openclaw/gateway.mjs";
 import { createPoIBroker } from "../openclaw/broker.mjs";
 import { engine } from "../lib/engine.mjs";
 import { DIMENSIONS, FRUITS } from "../lib/providers.mjs";
@@ -20,6 +20,15 @@ test('native control diagnostics distinguish the exact watchdog close without re
     assert.equal(error.code, 'OPENCLAW_CONTROL_CLOSED');
     assert.equal(error.message.includes(reason), false);
   }
+});
+
+test('owned native lifecycle diagnostics are bounded fixed enums and numeric generations only', () => {
+  assert.equal(nativeLifecycleDiagnostic('exit', 3, 78, null), '[chainchat] native lifecycle event=exit generation=3 code=78 signal=none\n');
+  assert.equal(nativeLifecycleDiagnostic('control-close', 4, 1006, null), '[chainchat] native lifecycle event=control-close generation=4 code=1006 signal=none\n');
+  assert.equal(nativeLifecycleDiagnostic('exit', 4, null, 'SIGKILL'), '[chainchat] native lifecycle event=exit generation=4 code=none signal=SIGKILL\n');
+  const result = nativeLifecycleDiagnostic('private-key\nexit', 'private-key', -1, 'private-key\nSIGTERM');
+  assert.equal(result, '[chainchat] native lifecycle event=UNKNOWN generation=UNKNOWN code=UNKNOWN signal=UNKNOWN\n');
+  assert.equal(result.includes('private-key'), false);
 });
 
 test('private model route capability is accepted only once in system instructions and stripped for every protocol', () => {

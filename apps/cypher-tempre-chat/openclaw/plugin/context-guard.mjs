@@ -1,5 +1,6 @@
 /** Keep a failed mandatory engine selected; never let native error isolation pick a writer. */
 import path from 'node:path';
+import {writeSync} from 'node:fs';
 
 export const ENFORCEMENT_HEALTH_METHOD = 'chainchat.enforcementHealth';
 const ID = 'cypher-tempre-poi';
@@ -12,6 +13,15 @@ const info = {
 };
 const failure = () => Object.assign(new Error(HELD), { code: 'OPENCLAW_ENFORCEMENT_UNHEALTHY' });
 const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+const faultReasons = new Set(['FACTORY_FAILED', 'BOOTSTRAP_FAILED', 'INGEST_FAILED', 'ASSEMBLE_FAILED', 'COMPACT_FAILED', 'COMMIT_TURN_FAILED']);
+export function criticalContextDiagnostic(reason) {
+  return '[chainchat] mandatory context fault reason=' + (faultReasons.has(reason) ? reason : 'UNKNOWN') + '\n';
+}
+export function criticalContextFailStop(reason) {
+  // Emit only a fixed enum synchronously; never serialize a native exception.
+  try { writeSync(2, criticalContextDiagnostic(reason)); }
+  finally { process.exit(78); }
+}
 
 export function createGuardedContextFactory({ load, context, onCriticalFault } = {}) {
   if (typeof load !== 'function' || typeof onCriticalFault !== 'function') throw new TypeError('A native loader and synchronous owned-process fail-stop are required.');

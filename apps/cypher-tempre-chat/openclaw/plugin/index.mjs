@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReviewedContextEngine } from './compaction.mjs';
 import { createNativeCompactionStats, COMPACTION_STATS_METHOD } from './compaction-stats.mjs';
-import { createGuardedContextFactory, ENFORCEMENT_HEALTH_METHOD } from './context-guard.mjs';
+import { createGuardedContextFactory, ENFORCEMENT_HEALTH_METHOD, criticalContextFailStop } from './context-guard.mjs';
 import { createChannelHooks } from './channels.mjs';
 import { sanitizeOwnedBrowserResult, createOwnedBrowserResultMiddleware } from './browser-results.mjs';
 import { managedServicesFactory } from './services.mjs';
@@ -393,7 +393,7 @@ export function register(api) {
       sdk: await import('openclaw/plugin-sdk/agent-sessions'), request, workspaceDir: context.workspaceDir,
       targetRegistry: stats(),
       commitStore: api.runtime.state.openKeyedStore({ namespace: 'chainchat-native-accepted-turns', retention: 'retained' }) }),
-    onCriticalFault: () => process.exit(78) });
+    onCriticalFault: criticalContextFailStop });
   api.registerGatewayMethod?.(ENFORCEMENT_HEALTH_METHOD, async ({ params, respond }) => {
     try {
       const llm=api.config?.plugins?.entries?.[PLUGIN_ID]?.llm;

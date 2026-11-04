@@ -26,6 +26,7 @@ import {waitForNativeSessionIdle} from '../lib/native-session-idle.mjs';
 import {assertRuntimeCompatibility} from './runtime-compatibility.mjs';
 import {modelRouteForConfig} from './plugin/model-route.mjs';
 import {prepareNativeUpgrade,completeNativeUpgrade} from './native-upgrade.mjs';
+import {createNativeControlConnection,stopNativeControlClient} from './native-control-connection.mjs';
 
 import { CONTEXT_POLICY } from './plugin/compaction.mjs';
 
@@ -44,6 +45,13 @@ export function nativeControlCloseError(code, reason) {
   return code === 4000 && reason === 'tick timeout'
     ? fail('The native control heartbeat timed out. No unreviewed answer was released.', 'OPENCLAW_CONTROL_TIMEOUT', 504)
     : fail('The native control connection closed.', 'OPENCLAW_CONTROL_CLOSED');
+}
+export function nativeLifecycleDiagnostic(event, generation, code, signal) {
+  const safeEvent = ['exit', 'control-close'].includes(event) ? event : 'UNKNOWN';
+  const safeGeneration = Number.isSafeInteger(generation) && generation > 0 ? generation : 'UNKNOWN';
+  const safeCode = code === null ? 'none' : Number.isSafeInteger(code) && code >= 0 && code <= 0xffffffff ? code : 'UNKNOWN';
+  const safeSignal = signal === null ? 'none' : ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGHUP', 'SIGABRT', 'SIGSEGV', 'SIGBUS', 'SIGILL'].includes(signal) ? signal : 'UNKNOWN';
+  return `[chainchat] native lifecycle event=${safeEvent} generation=${safeGeneration} code=${safeCode} signal=${safeSignal}\n`;
 }
 function nativeControlWatchdogMs(requestTimeoutMs) {
   if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 100 || requestTimeoutMs > 600000)
@@ -347,13 +355,36 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
   const providerSessions = new WeakMap();
   let child = null, proxy = null, port = null, proxyPort = null, active = null, queue = Promise.resolve(), startup = null, stopping = null, stoppingChild = null;
   let gatewayToken = secret(), proxyToken = secret(), closed = false;
-  let identity = null, nativeClient = null, nativeConnection = null, lastConfiguration = null, pendingOverlay = null;
+  let childGeneration = 0;
+  let identity = null, lastConfiguration = null, pendingOverlay = null;
   let browserHosts = [], reasoningCapable = false, capabilitiesInitialized = false;
   let contextWindow = modelContextTokens || 131072, outputCeiling = 32768;
   let managedServices = {};
   let nativeSelection = null, nativeProviders = {}, nativeAuthConfiguration = {}, nativeProvidersLoaded = false, nativeCatalogueDirty = true;
   let lastServiceEnvironmentHash = null;
   const nativeEvents = new Set();
+  const nativeControl = createNativeControlConnection({
+    getOwner: () => ({ child, generation: childGeneration, port, token: gatewayToken }),
+    isOwnerCurrent: owner => !closed && owner.child && owner.child === child && owner.generation === childGeneration &&
+      owner.port === port && owner.token === gatewayToken && child.exitCode === null && child.signalCode === null,
+    createClient: async (callbacks, owner) => {
+      const { GatewayClient } = await import(pathToFileURL(path.join(upstream, 'dist/plugin-sdk/gateway-runtime.js')).href);
+      const deviceIdentity = await operatorIdentity(directory), controlUrl = `ws://127.0.0.1:${owner.port}`;
+      return new GatewayClient({ url: controlUrl, deviceAuthScope: controlUrl, token: owner.token,
+        clientName: 'cli', clientDisplayName: 'Cypher Tempre private controls', mode: 'backend', role: 'operator',
+        caps: ['session-scoped-events', 'model-selection-policy'],
+        // Keep long reviewed hooks bounded by the invocation and cleanup budget.
+        tickWatchTimeoutMs: controlWatchdogTimeoutMs,
+        scopes: ['operator.read', 'operator.write', 'operator.admin'], deviceIdentity, sharedStateMode: 'read-only',
+        ...callbacks,
+      });
+    },
+    onEvent(event) { for (const listener of nativeEvents) { try { listener(event); } catch {} } },
+    onCloseDiagnostic(owner, code) { onDiagnostic?.(nativeLifecycleDiagnostic('control-close', owner.generation, code, null)); },
+    closeError: nativeControlCloseError,
+    authenticationError: () => fail('Native OpenClaw control authentication failed.', 'OPENCLAW_CONTROL_AUTH'),
+    timeoutError: () => fail('The native OpenClaw control connection did not authenticate.', 'OPENCLAW_CONTROL_TIMEOUT'),
+  });
   const nativeCredentialValues=new Set(),sensitiveNativeWizards=new Set();
   const dynamicInvocations = new Map(), pendingDynamic = new Map(), routeInvocations = new Map(),dynamicRows=new Set();
   let nativeSourcesReady=!deferNativeSources,resolveNativeReadiness,nativeUpgrade;
@@ -386,26 +417,26 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       // this exact owned process before acknowledging a failed model request:
       // graceful shutdown could let upstream persist a fallback summary first.
       const owned = child || stoppingChild; child = null;
-      const client = nativeClient; nativeClient = null; nativeConnection = null;
+      const client = nativeControl.invalidate();
       if (owned && owned.exitCode === null && owned.signalCode === null) {
         owned.kill('SIGKILL');
         await waitForExit(owned, 5000);
         if (owned.exitCode === null && owned.signalCode === null)
           throw fail('The isolated runtime could not be stopped after an integrity fault.', 'OPENCLAW_STOP_FAILED');
       }
-      await client?.stopAndWait({ timeoutMs: 2000 }).catch(() => {});
+      await stopNativeControlClient(client);
       return;
     }
     if (stopping) return stopping;
     const owned = child; child = null;
     if (!owned || owned.exitCode !== null || owned.signalCode !== null) {
-      const client = nativeClient; nativeClient = null; nativeConnection = null;
-      await client?.stopAndWait({ timeoutMs: 2000 }).catch(() => {}); return;
+      const client = nativeControl.invalidate();
+      await stopNativeControlClient(client); return;
     }
     stoppingChild = owned;
     stopping = (async () => {
-      const client = nativeClient; nativeClient = null; nativeConnection = null;
-      if (client) await client.stopAndWait({ timeoutMs: 2000 }).catch(() => {});
+      const client = nativeControl.invalidate();
+      await stopNativeControlClient(client);
       // An owned IPC pipe works on Windows without a visible console. The
       // bootstrap forwards only this fixed shutdown message to the pinned
       // runtime's native SIGTERM handler; it exposes no command interface.
@@ -632,6 +663,10 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       if (closed) throw fail("This OpenClaw manager is closed.", "OPENCLAW_CLOSED");
       child = spawnImpl(nodePath, ["--input-type=module", "--eval", bootstrap, path.join(upstream, "openclaw.mjs"), "gateway", "run", "--port", String(port), "--bind", "loopback"],
         { cwd: directory, env: environment, windowsHide: true, stdio: ["ignore", "pipe", "pipe", "ipc"], detached: process.platform !== "win32" });
+      const generation = ++childGeneration;
+      child.on('exit', (code, signal) => {
+        try { onDiagnostic?.(nativeLifecycleDiagnostic('exit', generation, code, signal)); } catch {}
+      });
       lastServiceEnvironmentHash = serviceEnv.hash;
       let spawnError = false;
       child.on("error", () => { spawnError = true; });
@@ -670,31 +705,7 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
   }
   async function nativeConnectionReady({ duringStartup = false } = {}) {
     if (!duringStartup) await start();
-    if (nativeConnection) return nativeConnection;
-    nativeConnection = (async () => {
-      const { GatewayClient } = await import(pathToFileURL(path.join(upstream, 'dist/plugin-sdk/gateway-runtime.js')).href);
-      const deviceIdentity = await operatorIdentity(directory);
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { client.stop(); reject(fail('The native OpenClaw control connection did not authenticate.', 'OPENCLAW_CONTROL_TIMEOUT')); }, 20000);
-        const controlUrl = `ws://127.0.0.1:${port}`;
-        const client = new GatewayClient({ url: controlUrl, deviceAuthScope: controlUrl, token: gatewayToken,
-          clientName: 'cli', clientDisplayName: 'Cypher Tempre private controls', mode: 'backend', role: 'operator',
-          caps: ['session-scoped-events', 'model-selection-policy'],
-          // chat.send acknowledges before an agent finishes. Long verified
-          // hooks can then be quiet for more than the SDK's default 60s tick
-          // window. Keep the watchdog bounded by the invocation plus cleanup;
-          // the independent invocation timer still cancels the actual work.
-          tickWatchTimeoutMs: controlWatchdogTimeoutMs,
-          scopes: ['operator.read', 'operator.write', 'operator.admin'], deviceIdentity, sharedStateMode: 'read-only',
-          onHelloOk() { clearTimeout(timer); resolve(client); },
-          onConnectError() { clearTimeout(timer); client.stop(); reject(fail('Native OpenClaw control authentication failed.', 'OPENCLAW_CONTROL_AUTH')); },
-          onEvent(event) { for (const listener of nativeEvents) { try { listener(event); } catch {} } },
-          onClose(code, reason) { if (active?.nativeRun) active.nativeClose?.(code, reason); },
-        });
-        nativeClient = client; client.start();
-      });
-    })().catch(error => { nativeConnection = null; throw error; });
-    return nativeConnection;
+    return nativeControl.ready();
   }
   async function nativeRpc(method, params, { timeoutMs = 30000 } = {}) {
     const client = await nativeConnectionReady();
@@ -1217,7 +1228,9 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       void client.request('chat.abort', { sessionKey: params.sessionKey, runId: expectedRun }).catch(() => {});
       if (!settled) done.reject(fail('The native OpenClaw turn was cancelled.', 'REQUEST_CANCELLED', 499));
     };
-    if (active) { active.nativeRun = true; active.nativeClose = (code, reason) => { if (!settled) done.reject(nativeControlCloseError(code, reason)); }; }
+    const unsubscribeClose = nativeControl.subscribeClose(client, error => {
+      if (!settled) { settled = true; done.reject(error); }
+    });
     nativeEvents.add(listener); controller.signal.addEventListener('abort', aborted, { once: true });
     try {
       await client.request('sessions.messages.subscribe', { key: params.sessionKey, subscriptionId: 'chainchat-active-turn' });
@@ -1229,9 +1242,9 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       if (acknowledgement.replayed) throw fail('This native goal operation already completed; refresh its state.', 'OPENCLAW_GOAL_REPLAY', 409);
       for (const event of earlyEvents) listener(event);
       return await completed;
-    } finally { nativeEvents.delete(listener); controller.signal.removeEventListener('abort', aborted);
+    } finally { unsubscribeClose(); nativeEvents.delete(listener); controller.signal.removeEventListener('abort', aborted);
       await client.request('sessions.messages.unsubscribe', { key: params.sessionKey, subscriptionId: 'chainchat-active-turn' }).catch(() => {});
-      if (active) { active.nativeRun = false; active.nativeClose = null; } }
+    }
   }
   async function assertEnforcementHealthy({ duringStartup = false } = {}) {
     try {
