@@ -266,9 +266,13 @@ selected context is sent. Keys are not published to the website.
 
 ### Install the local controller
 
-- [Windows](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.0/CypherTempre-ChainChat-Setup-0.10.0-windows-x64.exe)
-- [macOS](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.0/CypherTempre-ChainChat-Setup-0.10.0-macos.zip)
-- [Linux](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.0/CypherTempre-ChainChat-Setup-0.10.0-linux.tar.gz)
+- [Windows](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.1/CypherTempre-ChainChat-Setup-0.10.1-windows-x64.exe)
+- [macOS](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.1/CypherTempre-ChainChat-Setup-0.10.1-macos.zip)
+- [Linux](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.1/CypherTempre-ChainChat-Setup-0.10.1-linux.tar.gz)
+
+New users follow a guided installer and local setup wizard through model selection,
+a fresh or existing Timechain, and a no-inference readiness check. The guide can be
+reopened from the top of the chat; existing configured users can keep chatting.
 
 This repository is the maintained source for both the skill and controller.
 [cyphertempre.ai](https://cyphertempre.ai/) serves the same reviewed frontend as

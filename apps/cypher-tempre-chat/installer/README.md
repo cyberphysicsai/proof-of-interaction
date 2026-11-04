@@ -21,6 +21,17 @@ and separate from installing the local chat runtime.
 
 ## Windows x64
 
+The setup window starts with a welcome page and an **Install ChainChat** button.
+It shows four stages: prepare, install, check and continue. Closing or cancelling
+the welcome page does not install anything. Once installation and authenticated
+local startup checks pass, **Open setup** opens the browser guide. That guide
+handles model connection, a new or existing Timechain, and chat readiness; the
+installer does not claim the chat is ready merely because files were installed.
+API keys are entered only in the model connection screen. The first browser
+handoff is deferred until **Open setup**, so it does not open behind the installer.
+Quiet installation and the existing launch/rollback commands keep their normal
+noninteractive behavior.
+
 The Windows x64 setup executable installs ChainChat for the current user. It
 embeds the reviewed application ZIP and downloads exact, hash-pinned Node.js and
 CPython runtimes from their official HTTPS distribution hosts. It uses locked
@@ -49,8 +60,8 @@ launcher starts the selected release's gateway and UI through
 not start a separate bridge or install the skill, Node or Python themselves.
 Setup waits for the owned runtime's authenticated readiness check before
 reporting success; reopening the Start Menu shortcut reuses that running
-instance. Cold startup has a bounded four-minute readiness window, covering the
-Gateway's cold-start allowance and local restoration. An exited child still
+instance. Cold startup has a bounded fifteen-minute readiness window, covering
+storage checks, a possible offline upgrade and Gateway startup. An exited child still
 fails immediately; the readiness check still requires the exact owned runtime.
 API/model selection and choosing a new or existing Timechain remain
 explicit user controls. Provider setup is available immediately after local
@@ -75,7 +86,7 @@ beside the executable.
 Build on Windows after producing the sanitized Git-based application ZIP:
 
 ```powershell
-python installer/build_windows.py --archive C:\reviewed\cypher-tempre-chat-v0.10.0.zip --output C:\reviewed\CypherTempre-ChainChat-Setup-0.10.0-windows-x64.exe
+python installer/build_windows.py --archive C:\reviewed\cypher-tempre-chat-v0.10.1.zip --output C:\reviewed\CypherTempre-ChainChat-Setup-0.10.1-windows-x64.exe
 ```
 
 The .NET Framework compiler consumes the C# source, Windows manifest and font
@@ -94,7 +105,7 @@ Use a dedicated empty test directory, suppress launch/shortcuts, and capture the
 result without touching the current user's actual installation:
 
 ```powershell
-.\CypherTempre-ChainChat-Setup-0.10.0-windows-x64.exe --quiet --install-root C:\test\chainchat-install --no-launch --no-shortcuts --result-file C:\test\install-result.json
+.\CypherTempre-ChainChat-Setup-0.10.1-windows-x64.exe --quiet --install-root C:\test\chainchat-install --no-launch --no-shortcuts --result-file C:\test\install-result.json
 ```
 
 `--cache-dir` may name a directory containing the exact official Node/CPython ZIP

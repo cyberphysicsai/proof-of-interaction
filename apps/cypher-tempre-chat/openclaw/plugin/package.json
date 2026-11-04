@@ -1,6 +1,6 @@
 {
   "name": "@cypher-tempre/openclaw-poi",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "type": "module",
   "private": true,
   "license": "MIT",

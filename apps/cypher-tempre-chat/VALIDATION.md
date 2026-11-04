@@ -1,4 +1,20 @@
-# ChainChat 0.10.0 validation
+# ChainChat validation
+
+## Guided setup — 0.10.1
+
+This update adds native installer guidance and a resumable browser setup guide.
+Its authenticated readiness endpoint performs no inference, starts no runtime
+and does not write chain memory or repair equipment. It distinguishes verified
+configuration from successful provider credentials. Wizard actions reuse the
+existing model and Timechain forms; a prepared first message is never sent
+automatically. Setup checks must match the current agent, head and model.
+
+Focused readiness, stale-result, wizard navigation, installer and UI regressions
+cover this change. Exact executed totals and platform acceptance belong to the
+[0.10.1 release](https://github.com/cyberphysicsai/proof-of-interaction/releases/tag/chat-beta-v0.10.1).
+The observations below were recorded for 0.10.0 and are retained with that scope.
+
+## Baseline 0.10.0 validation
 
 This records local source checks and their coverage limits. Exact final source,
 PR and merged-main CI, installer acceptance and live approval belong in the

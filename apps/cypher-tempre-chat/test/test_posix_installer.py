@@ -1,5 +1,6 @@
 import importlib.util
 import base64
+import contextlib
 import hashlib
 import io
 import json
@@ -19,6 +20,31 @@ import build_posix
 
 
 class PortableInstallerGuards(unittest.TestCase):
+    def test_guided_progress_does_not_claim_chat_readiness_or_pollute_json_output(self):
+        args = mock.Mock(quiet=False, no_launch=False)
+        progress, result = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(progress), contextlib.redirect_stdout(result):
+            installer.setup_stage(args, 4, 'Check the local runtime')
+            installer.setup_handoff(args)
+        self.assertEqual(result.getvalue(), '')
+        self.assertIn('Step 4/6: Check the local runtime', progress.getvalue())
+        self.assertIn('Your local runtime is ready.', progress.getvalue())
+        self.assertIn('Chat is ready when that guide confirms it.', progress.getvalue())
+        self.assertIn('select an existing one', progress.getvalue())
+        self.assertIn('Proof of Interaction', progress.getvalue())
+        self.assertNotIn('Your chat is ready', progress.getvalue())
+
+    def test_quiet_and_no_launch_handoffs_preserve_their_distinct_meanings(self):
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            installer.setup_stage(mock.Mock(quiet=True), 3, 'Do not print')
+            installer.setup_handoff(mock.Mock(quiet=True, no_launch=False))
+        self.assertEqual(output.getvalue(), '')
+        with contextlib.redirect_stderr(output):
+            installer.setup_handoff(mock.Mock(quiet=False, no_launch=True))
+        self.assertIn('runtime was not started', output.getvalue())
+        self.assertNotIn('Your local runtime is ready', output.getvalue())
+
     def source_fixture(self, filename, mutate=None):
         pins = json.loads((ROOT / 'openclaw/upstream-lock.json').read_text(encoding='utf-8'))
         if mutate: mutate(pins)
