@@ -10,7 +10,7 @@ const appRoot = fileURLToPath(new URL('../', import.meta.url));
 const packagedRoot = path.join(appRoot, 'engine/proof-of-interaction');
 const integrityPath = path.join(appRoot, 'openclaw/engine-integrity.json');
 const source = Object.freeze({ owner: 'cyberphysicsai', repository: 'proof-of-interaction', ref: 'main',
-  directory: 'skills/openclaw/proof-of-interaction', packagedCommit: '1f3b61e8cfadf7116ecaad6c626068fbb972dbff' });
+  directory: 'skills/openclaw/proof-of-interaction', packagedCommit: '87adbdb74db1ca8cb35e57d5042de22c4bed3348' });
 export const CANONICAL_SKILL_SOURCE = source;
 const scope = new AsyncLocalStorage(), snapshots = new WeakSet();
 const unscopedBinding = randomBytes(16).toString('hex');

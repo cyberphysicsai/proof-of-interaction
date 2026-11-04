@@ -3,9 +3,15 @@
 ChainChat uses the maintained source at
 [cyberphysicsai/proof-of-interaction](https://github.com/cyberphysicsai/proof-of-interaction),
 not a separately edited cognitive engine. The packaged 69-file fallback exactly matches
-the official OpenClaw bundle at commit `1f3b61e8cfadf7116ecaad6c626068fbb972dbff`.
+the official OpenClaw bundle at commit `87adbdb74db1ca8cb35e57d5042de22c4bed3348`.
 The updater selects that same official bundle from `skills/openclaw/proof-of-interaction`.
 ChainChat's adapter and mandatory host policy remain separate from those files.
+
+This canonical snapshot corrects dream growth eligibility: generated registry epochs,
+autobiographies, calibrations and faculty/custody maintenance do not count as fresh
+experience. Those records remain in history and recall; genuine new experience and
+custom experience types remain eligible. The five maintained runtime bundles share
+the same correction. No chain format migration is introduced.
 
 Installed startup checks the fixed publisher's `main` channel. Idle operations recheck at
 most hourly. A discovered commit is resolved once; intermediate Git trees and each
