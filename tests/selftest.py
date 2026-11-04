@@ -2142,6 +2142,15 @@ def main():
             print(_growth.stdout)
             print(_growth.stderr)
 
+        _entities = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("test_entity_grounding.py"))],
+            capture_output=True, text=True, timeout=120)
+        check("entity grounding: complete specifics reject incidental substrings and preserve exact support",
+              _entities.returncode == 0)
+        if _entities.returncode:
+            print(_entities.stdout)
+            print(_entities.stderr)
+
         check("timechain: final verify", tc.verify()[0])
 
         # phase24 — CPHY economic layer + custody/PQ organs run their own
