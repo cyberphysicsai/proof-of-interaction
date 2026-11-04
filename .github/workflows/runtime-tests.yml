@@ -2,6 +2,8 @@ name: Runtime tests
 
 on:
   push:
+    branches: [main]
+    tags: ['**']
   pull_request:
 
 permissions:

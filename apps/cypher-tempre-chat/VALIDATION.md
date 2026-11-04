@@ -10,11 +10,18 @@ establish benchmark parity, perfect security or elimination of hallucinations.
 ## Source and runtime identity
 
 The packaged PoI fallback is the complete 69-file canonical OpenClaw skill bundle
-at `1f3b61e8cfadf7116ecaad6c626068fbb972dbff`, with matching Git blobs, file modes
+at `87adbdb74db1ca8cb35e57d5042de22c4bed3348`, with matching Git blobs, file modes
 and SHA-256 manifest. The fixed-publisher skill updater verifies candidate Git
 objects, tests compatibility and switches between turns while preserving user
 chains, registries and approvals. Git hashes establish the publisher snapshot;
 they are not a maintainer signature.
+
+This deliberately updates canonical `dream.py` so generated maintenance records cannot
+bootstrap new faculty growth without new experience. The canonical regression covers
+repeated actual dreams, preserved history, all five runtime copies, and genuine/custom
+experience remaining eligible. No PoI floor or chain format changes. The earlier local
+observations below retain their original source scope; they are not fresh acceptance of
+this corrected bundle. Exact final-source CI and installer evidence remain required.
 
 The OpenClaw runtime is pinned to **2026.10.10** and portable Node to
 **26.13.0**. Its original npm archive keeps the published SRI. The extracted
