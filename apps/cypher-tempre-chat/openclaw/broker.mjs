@@ -101,7 +101,7 @@ export function createPoIBroker({ engine, review, generateSummary, channelIngres
     const claim = bySession.get(key); return claim?.purpose === 'candidate' ? claim : null;
   },
     authorize, native, skill, now, ttlMs });
-  async function registerInvocation({ config, args, context, sessionKey, invocationId }) {
+  async function createInvocation({ config, args, context, sessionKey, invocationId }, {publish = true} = {}) {
     const previous = bySession.get(sessionKey);
     const replaceable = () => previous && previous.ended && previous.finalized && previous.context.autonomousCommit === true &&
       previous.purpose === 'candidate' && context?.purpose === 'candidate' && bounded(context.nativeOwnerKey, 1024) &&
@@ -136,6 +136,7 @@ export function createPoIBroker({ engine, review, generateSummary, channelIngres
       expiresAt: now() + ttlMs, ended: false, finalized: false };
     await authorize(claim);
     if (context.mediaTaskProof) {
+      if (!publish) throw failure('A budget preview cannot adopt a native media completion.', 'NATIVE_OUTPUT_MEDIA_HELD');
       const task = context.mediaTask, pending = pendingMedia.get(task?.taskId);
       if (claim.purpose !== 'candidate' || !pending || pending.expiresAt <= now() || pending.ownerKey !== context.nativeOwnerKey ||
           ['taskId', 'runId', 'toolName', 'parentSessionKey', 'originalRunId', 'callId', 'sessionId', 'lifecycleRevision'].some(key => task[key] !== pending.task[key]) ||
@@ -169,8 +170,12 @@ export function createPoIBroker({ engine, review, generateSummary, channelIngres
     // preventing a new caller or an await race from replacing active authority.
     if (bySession.get(sessionKey) !== previous || previous && (!replaceable() ||
         previous.inspected.genesis.hash !== inspected.genesis.hash)) throw failure('The native session binding changed during admission.');
-    claims.set(claimId, claim); bySession.set(sessionKey, claim);
-    return { claimId, sessionKey };
+    if (publish) { claims.set(claimId, claim); bySession.set(sessionKey, claim); }
+    return claim;
+  }
+  async function registerInvocation(invocation) {
+    const claim = await createInvocation(invocation);
+    return {claimId: claim.claimId, sessionKey: claim.sessionKey};
   }
   function registerControlInvocation({ sessionKey, runId, command }) {
     if (closed || !url || !bounded(sessionKey, 512) || !bounded(runId, 512) ||
@@ -670,17 +675,13 @@ export function createPoIBroker({ engine, review, generateSummary, channelIngres
     nativeInvocation(sessionKey) {return bySession.get(sessionKey) || null;},
     async verifyNativeMediaTask(proof, expected) {return typeof nativeLifecycle.verifyMediaTask === 'function' && await nativeLifecycle.verifyMediaTask(proof, expected) === true;},
     // Private supervisor probe: build the actual skill/recall/loadout context
-    // without admitting a native run or contacting a model. Retire its claim
-    // before official pre-turn compaction acquires the same session.
+    // without publishing native transport/context/run authority. A late native
+    // event must never select a route from a preview that disappears before
+    // its mandatory assembly. Real registration follows pre-turn compaction.
     async estimateInvocation(invocation) {
-      const admitted = await registerInvocation(invocation);
-      try {
-        const claim = claims.get(admitted.claimId), prepared = await prepare(claim);
-        return { estimatedTokens: Math.ceil(Buffer.byteLength(prepared.context || '', 'utf8') / 4) };
-      } finally {
-        if (bySession.get(admitted.sessionKey)?.claimId === admitted.claimId) bySession.delete(admitted.sessionKey);
-        claims.delete(admitted.claimId);
-      }
+      const claim = await createInvocation(invocation, {publish: false});
+      const prepared = await prepare(claim);
+      return { estimatedTokens: Math.ceil(Buffer.byteLength(prepared.context || '', 'utf8') / 4) };
     },
     registerCompactionInvocation: compactions.registerCompactionInvocation,
     finishCompactionInvocation: compactions.finishCompactionInvocation,

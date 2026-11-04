@@ -16,7 +16,7 @@ async function fixture(t, options = {}) {
   const sessionKey = options.sessionKey || 'agent:main:chainchat:fixture';
   await engine({ op: 'init', root, name: 'Cypher Tempre' });
   let time = Date.now(); const seen = [];
-  const broker = createPoIBroker({ engine, review: async (config, args) => { seen.push(args); return options.assessment?.() || good(); }, now: () => time });
+  const broker = createPoIBroker({ engine: options.engine || engine, review: async (config, args) => { seen.push(args); return options.assessment?.() || good(); }, now: () => time });
   await broker.start();
   t.after(async () => { await broker.close(); assert.ok(path.resolve(dir).startsWith(path.resolve(os.tmpdir()) + path.sep)); await fs.rm(dir, { recursive: true, force: true }); });
   const config = { provider: 'compatible', model: 'fixture', baseUrl: 'http://127.0.0.1:1234/v1', apiKey: 'fixture-private-key' };
@@ -65,7 +65,7 @@ test('queued native run adoption requires its exact typed host source nonce and 
   assert.equal((await f.call('admit',{runId:'another-native-run',nativeContext:{currentSourceTurnId:'host-input-nonce:user'}})).body.allowed,false);
 });
 
-test('private context budgeting prepares the actual skill and retires its unbound claim', async t => {
+test('private context budgeting prepares the actual skill without publishing a native claim', async t => {
   const f = await fixture(t);
   const inspected = await engine({ op: 'inspect', root: f.root, learning: false });
   const estimate = await f.broker.estimateInvocation({
@@ -80,6 +80,41 @@ test('private context budgeting prepares the actual skill and retires its unboun
   await f.register();
   assert.equal((await f.call('admit')).body.allowed, true, 'The same session remains available for the real turn.');
   assert.equal(f.seen.length, 0, 'Budget probes must not contact the reviewer or model.');
+});
+
+test('a paused private budget preparation never publishes a late native route or context claim', async t => {
+  let entered, release;
+  const preparing = new Promise(resolve => { entered = resolve; }), held = new Promise(resolve => { release = resolve; });
+  const f = await fixture(t, {engine: async request => {
+    if (request.op === 'prepare') { entered(); await held; }
+    return engine(request);
+  }});
+  const sessionKey = 'agent:main:chainchat:fixture', correlation = 'context-assembly:00000000-0000-4000-8000-000000000001';
+  const before = await engine({op:'inspect',root:f.root,learning:false});
+  const pending = f.broker.estimateInvocation({
+    config: {provider:'compatible',model:'fixture',baseUrl:'http://127.0.0.1:1234/v1',apiKey:'fixture-private-key'},
+    args: {messages:[{role:'user',content:'Please introduce yourself'}]},
+    context: {root:f.root,input:'Please introduce yourself',purpose:'candidate',loadout:[],settings:{recall:false},
+      expectedClientInputId:'future-host-input',modelRouteCapability:'c'.repeat(64)},
+    sessionKey,invocationId:'budget-only',
+  });
+  await preparing;
+  let estimate;
+  try {
+    assert.equal((await f.call('model_route',{runId:'late-unrelated-native-run'})).body.allowed,false,
+      'A late native event must not select a route while private estimation awaits.');
+    assert.equal(f.broker.nativeInvocation(sessionKey),null,'The preview never enters the native session map.');
+    for (const [op,fields] of [['admit',{}],['model_context',{runId:correlation,model:{provider:'chainchat-compatible',model:'route'}}]])
+      assert.equal((await f.call(op,fields)).body.allowed,false,'A preview grants no '+op+' authority.');
+  } finally { release(); estimate = await pending; }
+  assert.ok(estimate.estimatedTokens>1000);assert.equal(f.broker.nativeInvocation(sessionKey),null);
+  for (const op of ['model_route','admit','model_context'])
+    assert.equal((await f.call(op,op==='model_context'?{runId:correlation,model:{provider:'chainchat-compatible',model:'route'}}:{})).body.allowed,false);
+  assert.equal(f.seen.length,0,'The entire preview path makes no model or reviewer call.');
+  assert.deepEqual((await engine({op:'inspect',root:f.root,learning:false})).head,before.head);
+  await f.register({expectedClientInputId:'actual-host-input',modelRouteCapability:'c'.repeat(64)});
+  assert.equal((await f.call('admit',{runId:'actual-host-input'})).body.allowed,true);
+  assert.equal((await f.call('prepare',{runId:'actual-host-input'})).body.allowed,true,'A genuine owned turn still prepares normally.');
 });
 
 test('a completed autonomous turn releases its session for the same owner without losing its exact delivery receipt', async t => {

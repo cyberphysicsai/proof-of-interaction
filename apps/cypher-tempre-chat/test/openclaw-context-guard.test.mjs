@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { createGuardedContextFactory } from '../openclaw/plugin/context-guard.mjs';
+import { createGuardedContextFactory, criticalContextDiagnostic } from '../openclaw/plugin/context-guard.mjs';
 import { createReviewedContextEngine } from '../openclaw/plugin/compaction.mjs';
 
 function core(overrides = {}) {
@@ -15,6 +15,14 @@ function core(overrides = {}) {
     commitTurn: async () => ({ status: 'committed' }), ...overrides };
 }
 const context = { workspaceDir: path.join(os.tmpdir(), 'owned-native-workspace') };
+
+test('critical diagnostics expose only fixed context reason enums', () => {
+  for (const reason of ['FACTORY_FAILED', 'BOOTSTRAP_FAILED', 'INGEST_FAILED', 'ASSEMBLE_FAILED', 'COMPACT_FAILED', 'COMMIT_TURN_FAILED'])
+    assert.equal(criticalContextDiagnostic(reason), '[chainchat] mandatory context fault reason=' + reason + '\n');
+  for (const reason of ['ASSEMBLE_FAILED\nsecret-key', {private:'secret-key'}, undefined]) {
+    assert.equal(criticalContextDiagnostic(reason), '[chainchat] mandatory context fault reason=UNKNOWN\n');
+  }
+});
 
 test('health constructs the real selected engine once and accepts only an empty private request', async () => {
   let loads = 0; const selected = core(), stopped = [];
@@ -90,15 +98,16 @@ test('a concurrent lifecycle fault revokes pending context but does not deny an 
 });
 
 test('production-style owned-process exit happens before native can catch a commit error and select fallback', () => {
-  const script = `import {createGuardedContextFactory} from ${JSON.stringify(new URL('../openclaw/plugin/context-guard.mjs', import.meta.url).href)};
+  const script = `import {createGuardedContextFactory,criticalContextFailStop} from ${JSON.stringify(new URL('../openclaw/plugin/context-guard.mjs', import.meta.url).href)};
     const engine=${JSON.stringify(core().info)};
     const guarded=createGuardedContextFactory({context:${JSON.stringify(context)},load:async()=>({info:engine,
       bootstrap:async()=>({bootstrapped:true}),ingest:async()=>({ingested:false}),assemble:async()=>({messages:[]}),compact:async()=>({ok:false,compacted:false}),
-      commitTurn:async()=>{throw new Error('synthetic failure')}}),onCriticalFault:()=>process.exit(78)});
+      commitTurn:async()=>{throw new Error('private-key-and-candidate-must-not-leak')}}),onCriticalFault:criticalContextFailStop});
     try{await(await guarded.factory()).commitTurn({})}catch{console.log('UNSAFE_NATIVE_FALLBACK')}`;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 5000,
     windowsHide: true, env: process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {} });
   assert.equal(result.status, 78, result.stderr); assert.equal(result.stdout, '');
+  assert.equal(result.stderr, '[chainchat] mandatory context fault reason=COMMIT_TURN_FAILED\n');
 });
 
 test('every failed or empty assembly fail-stops before native provider dispatch without relying on the BYOK proxy', async () => {
@@ -110,13 +119,14 @@ test('every failed or empty assembly fail-stops before native provider dispatch 
     assert.deepEqual(stopped, ['ASSEMBLE_FAILED']);
     assert.equal((await guarded.probe({})).healthy, false);
   }
-  const script = `import {createGuardedContextFactory} from ${JSON.stringify(new URL('../openclaw/plugin/context-guard.mjs', import.meta.url).href)};
+  const script = `import {createGuardedContextFactory,criticalContextFailStop} from ${JSON.stringify(new URL('../openclaw/plugin/context-guard.mjs', import.meta.url).href)};
     const engine=${JSON.stringify(core().info)};
     const guarded=createGuardedContextFactory({context:${JSON.stringify(context)},load:async()=>({info:engine,
       bootstrap:async()=>({bootstrapped:true}),ingest:async()=>({ingested:false}),assemble:async()=>{throw new Error('missing')},
-      compact:async()=>({ok:false,compacted:false}),commitTurn:async()=>({status:'committed'})}),onCriticalFault:()=>process.exit(78)});
+      compact:async()=>({ok:false,compacted:false}),commitTurn:async()=>({status:'committed'})}),onCriticalFault:criticalContextFailStop});
     await(await guarded.factory()).assemble({});console.log('UNSAFE_NATIVE_MODEL_DISPATCH')`;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 5000,
     windowsHide: true, env: process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {} });
   assert.equal(result.status, 78, result.stderr); assert.equal(result.stdout, '');
+  assert.equal(result.stderr, '[chainchat] mandatory context fault reason=ASSEMBLE_FAILED\n');
 });
