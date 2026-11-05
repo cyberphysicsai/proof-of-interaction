@@ -75,7 +75,9 @@ export function createNativeControlConnection({ getOwner, isOwnerCurrent, create
     retire(record, closeError());
     return client;
   }
-  return { ready, subscribeClose, invalidate };
+  // Read-only health projection: polling must never create a client or RPC.
+  const isReady = () => !!(current && isCurrent(current) && current.ready && current.client?.connected !== false);
+  return { ready, subscribeClose, invalidate, isReady };
 }
 
 /** SDK stopAndWait's final storage drain is outside its own timeout. */

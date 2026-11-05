@@ -1,6 +1,12 @@
 // Public diagnostics are fixed metadata, never provider bodies or private prompts.
 import { DIMENSIONS, FRUITS, REVIEW_THRESHOLD } from './providers.mjs';
 const messages = Object.freeze({
+  OPENCLAW_MEMORY_EXHAUSTED: 'The local runtime reported a memory-allocation failure. Inspect available system memory before restarting.',
+  OPENCLAW_PROCESS_KILLED: 'The gateway was killed externally (SIGKILL). Memory pressure is possible but is not confirmed by this signal alone.',
+  OPENCLAW_PROCESS_EXITED: 'The gateway exited unexpectedly. An exit code alone does not establish database corruption.',
+  OPENCLAW_START_FAILED: 'The local OpenClaw gateway could not start. Inspect runtime and memory diagnostics.',
+  OPENCLAW_START_TIMEOUT: 'The local OpenClaw gateway did not complete startup. A timeout alone does not establish database corruption.',
+  OPENCLAW_ENFORCEMENT_UNHEALTHY: 'The mandatory PoI runtime is unavailable. No unreviewed answer was released.',
   SESSION_CHANGED: 'The model or local session changed. Retry from the current app session.',
   PAIR_REQUIRED: 'This local session expired. Open ChainChat from its application launcher.',
   PROVIDER_HTTP_ERROR: 'The provider rejected the model request. Check the model, endpoint and configured limits.',
@@ -28,13 +34,30 @@ const messages = Object.freeze({
   OPENCLAW_OUTPUT_BUDGET: 'The model request has an invalid output budget.',
   OPENCLAW_CONTROL_TIMEOUT: 'The native control heartbeat timed out. No unreviewed answer was released.',
   OPENCLAW_CONTROL_CLOSED: 'The native control connection closed. No unreviewed answer was released.',
+  OPENCLAW_CONTROL_AUTH: 'Private OpenClaw control authentication failed. Inspect the matching local runtime before retrying.',
   OPENCLAW_MODEL_ROUTE_HELD: 'The native model route differs from the admitted owner connection. No model request was sent.',
 });
 export const CHAT_STAGES = new Set(['memory-planning', 'generation', 'review', 'native-review',
   'chain-preparation', 'loadout', 'context', 'compaction', 'commitment', 'provider', 'runtime', 'authorization', 'cancellation']);
+const TERMINAL_RUNTIME_CODES = new Set(['OPENCLAW_MEMORY_EXHAUSTED', 'OPENCLAW_PROCESS_KILLED',
+  'OPENCLAW_PROCESS_EXITED', 'OPENCLAW_START_FAILED', 'OPENCLAW_START_TIMEOUT']);
+const RUNTIME_CODES = new Set([...TERMINAL_RUNTIME_CODES, 'OPENCLAW_ENFORCEMENT_UNHEALTHY',
+  'OPENCLAW_CONTROL_CLOSED', 'OPENCLAW_CONTROL_TIMEOUT', 'OPENCLAW_CONTROL_AUTH']);
+const TRANSPORT_CODES = new Set([...RUNTIME_CODES].filter(code => code !== 'OPENCLAW_CONTROL_AUTH').concat(['OPENCLAW_RUNTIME', 'OPENCLAW_ENFORCEMENT',
+  'OPENCLAW_NATIVE_HELD', 'OPENCLAW_EMPTY_RESPONSE', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'UND_ERR_SOCKET']));
+// A failed RPC often reports the broken socket instead of the process exit.
+// Promote only an observed terminal failure of the owned gateway. Provider,
+// covenant, authentication and user cancellation errors keep their own cause.
+export function runtimeInvocationError(error, runtime) {
+  const transport = TRANSPORT_CODES.has(error?.code) || (!error?.code && TRANSPORT_CODES.has(error?.cause?.code));
+  if (!transport || runtime?.backend !== 'openclaw' || runtime.healthy === true ||
+      !TERMINAL_RUNTIME_CODES.has(runtime.failureCode)) return error;
+  return invocationError({code: runtime.failureCode});
+}
 export function errorStage(error, fallback = 'runtime') {
-  if (CHAT_STAGES.has(error?.stage)) return error.stage;
   const code = error?.code || '';
+  if (RUNTIME_CODES.has(code)) return 'runtime';
+  if (CHAT_STAGES.has(error?.stage)) return error.stage;
   if (/^(?:REQUEST_CANCELLED|CANCELLED)$/.test(code)) return 'cancellation';
   if (/^(?:SESSION_|PAIR_|PROVIDER_REQUIRED)/.test(code)) return 'authorization';
   if (code === 'INVALID_LOADOUT') return 'loadout';
@@ -51,7 +74,8 @@ export function safeInvocationError(error, fallbackStage = 'runtime') {
   const code = error.code;
   const status = code === 'SESSION_CHANGED' ? 409 : code === 'PAIR_REQUIRED' ? 401
     : code === 'PROVIDER_RATE_LIMIT' ? 429 : ['PROVIDER_TIMEOUT', 'OPENCLAW_CONTROL_TIMEOUT'].includes(code) ? 504
-    : code === 'OPENCLAW_CONTROL_CLOSED' ? 502
+    : ['OPENCLAW_CONTROL_CLOSED', 'OPENCLAW_CONTROL_AUTH'].includes(code) ? 502
+    : /^OPENCLAW_(?:MEMORY_EXHAUSTED|PROCESS_KILLED|PROCESS_EXITED|START_FAILED|START_TIMEOUT|ENFORCEMENT_UNHEALTHY)$/.test(code) ? 503
     : /^PROVIDER_(?:HTTP|CONNECTION)/.test(code) ? 502 : 422;
   const cleanScores = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
     keys.every(key => Number.isInteger(value[key]) && value[key] >= 0 && value[key] <= 255)

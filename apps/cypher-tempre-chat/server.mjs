@@ -44,7 +44,7 @@ import { createTrustedPluginManager, trustedPluginRpcValidators } from './lib/tr
 import { controlSessionKey } from './lib/openclaw-controls.mjs';
 import { createBrowserBootstrap } from './lib/browser-bootstrap.mjs';
 import { nativePluginNotice } from './lib/plugin-notices.mjs';
-import { errorStage } from './lib/runtime-errors.mjs';
+import { errorStage, runtimeInvocationError } from './lib/runtime-errors.mjs';
 import { createModelCatalogue } from './lib/model-catalogue.mjs';
 import { projectHostProcessContext, OWN_SESSION_REVIEW_TOOLS } from './lib/host-process-context.mjs';
 import {validateNativeCapabilities, nativeToolNames, isScopedHostTool} from './lib/native-capabilities.mjs';
@@ -502,7 +502,8 @@ export async function createApp(options = {}) {
     };
     let rawResult;
     try { rawResult = trace?.running ? await trace.step("model", "Model inference", action) : await action(); }
-    catch (error) {
+    catch (originalError) {
+      const error = runtimeInvocationError(originalError, openclaw?.status());
       if (args.chainchatPurpose === 'utility') error.stage = 'memory-planning';
       else error.stage ||= errorStage(error, 'generation');
       throw error;
@@ -2071,8 +2072,11 @@ export async function createApp(options = {}) {
             return send(200, await discoverTimechains({ agentDataRoot: store.root }));
           if (req.method === "GET" && url.pathname === "/api/activity") {
             const selected = store.agents.find(a => a.id === session.agentId);
-            return send(200, selected ? activityFor(session, selected).snapshot() :
-              { agentId: null, revision: 0, running: false, stage: "idle", activeAbilities: [], events: [] });
+            const snapshot = selected ? activityFor(session, selected).snapshot() :
+              { agentId: null, revision: 0, running: false, stage: "idle", activeAbilities: [], events: [] };
+            // Existing lightweight activity polling also reports process health;
+            // it never starts an engine/database worker or a native RPC.
+            return send(200, { ...snapshot, executionRuntime: openclaw ? openclaw.status() : { backend: 'direct' } });
           }
           if (req.method === "GET" && url.pathname === "/api/capabilities")
             return send(200, { capabilities: CAPABILITIES });

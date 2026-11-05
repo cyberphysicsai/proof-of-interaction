@@ -11,7 +11,7 @@ const HASH = '1'.repeat(64), COMMIT = 'a'.repeat(40), secret = 'synthetic-readin
 const canonicalSkill = {commit: COMMIT, origin: 'packaged-canonical', immutableTurnSnapshot: true};
 const agent = {verified: true, genesis: {name: 'Cypher Tempre', hash: HASH}, head: {index: 0, hash: HASH},
   runtime: {mode: 'active'}, root: '/private/chain', history: ['private history']};
-const native = {backend: 'openclaw', version: '2026.10.10', running: true};
+const native = {backend: 'openclaw', version: '2026.10.10', running: true, healthy: true, enforcementHealthy: true};
 const provider = {configured: true, provider: 'compatible', tier: 'byok', model: 'fixture-model',
   baseUrl: 'https://private-model.example/v1', apiKey: secret};
 const ready = extra => setupReadiness({runtime: native, provider, selected: true, agentId: 'fixture-agent', agent, canonicalSkill, ...extra});
@@ -34,6 +34,11 @@ test('missing or stopped native runtime is not certified as ready and the check 
   }
   assert.equal(ready({runtime: {...native, healthy: false}}).checks.runtime.ready, false);
   assert.equal(ready({runtime: {...native, enforcementHealthy: false}}).checks.runtime.ready, false);
+  for (const missing of ['healthy', 'enforcementHealthy']) {
+    const runtime = {...native}; delete runtime[missing];
+    const check = ready({runtime}).checks.runtime;
+    assert.equal(check.ready, false); assert.equal(check.reason, 'RUNTIME_UNHEALTHY');
+  }
 });
 
 test('a configured BYOK or native model is distinct from tested credentials', () => {
