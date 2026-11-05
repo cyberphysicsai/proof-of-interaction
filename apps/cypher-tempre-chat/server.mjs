@@ -33,6 +33,7 @@ import { createPoIBroker } from "./openclaw/broker.mjs";
 import { createOpenClawGateway } from "./openclaw/gateway.mjs";
 import { discoverTimechains } from "./openclaw/discovery.mjs";
 import { ToolPermissions, disabledToolAuthority } from "./lib/tool-permissions.mjs";
+import { createAgentSkills } from "./lib/agent-skills.mjs";
 import { validateToolAuthority, SUPPORTED_HOST_TOOLS } from "./lib/tool-authority.mjs";
 import { readChainAudit } from "./lib/audit-snapshot.mjs";
 import { createManagedAutomation } from './lib/managed-automation.mjs';
@@ -298,6 +299,7 @@ export async function createApp(options = {}) {
   const canonicalUpdates = options.canonicalUpdates === true;
   await canonicalSkills.initialize({ refresh: canonicalUpdates });
   const toolPermissions = await new ToolPermissions(store.root).load();
+  const agentSkills = createAgentSkills({ directory: path.join(store.root, 'agent-skills') });
   const nativeOwnerStore = await new NativeOwnerStore(store.root).load();
   const mediaStore = new NativeMediaStore(path.join(store.root, 'native-media'));
   const nativeCompletions = await new NativeCompletions(store.root).load();
@@ -482,6 +484,7 @@ export async function createApp(options = {}) {
         purpose, root: record.root, input, loadout: keys(record.loadout), settings: record.settings,
         learning: cognitionFor(record).learning, memoryPaused: scope.memoryPaused === true, signal: args.signal,
         nativeIdentity: identity, toolAuthority: purpose === "candidate" && !scope.scratchCandidates && !scope.memoryPaused ? tools.grant : disabledToolAuthority(),
+        additionalSkills: purpose === 'candidate' ? scope.agentSkillSnapshot?.skills : undefined,
         modelCapabilities: modelCapabilitiesFor(config),
         executeManagedService: params => requestSession.run(scope, () => executeAgentService(record, identity, params)),
         pluginTools: pluginCatalogue.map(tool => tool.name),
@@ -491,6 +494,8 @@ export async function createApp(options = {}) {
         toolProtectedRoots: protectedToolRoots(),
         authorize: () => requestSession.run(scope, async () => {
           await requireLocalAccess();
+          if (identity && scope.agentSkillSnapshot)
+            await agentSkills.assertCurrent(authorityKey(identity), scope.agentSkillSnapshot.revision);
           if (identity && toolPermissions.get(authorityKey(identity)).revision !== tools.revision)
             throw err("Tool permissions changed during this run. Start a fresh turn.", "TOOL_AUTHORITY_CHANGED", 409);
           if (pluginCatalogue.length && JSON.stringify(await trustedPlugins.toolCatalogue({ identity })) !== JSON.stringify(pluginCatalogue))
@@ -606,6 +611,11 @@ export async function createApp(options = {}) {
     if (inspected.verified !== true || !inspected.genesis?.hash)
       throw err("Verify the selected Timechain before using native controls.", "CHAIN_INVALID", 422);
     return { agentId: record.id, genesisHash: inspected.genesis.hash, record };
+  }
+  async function checkSkillOwner(session, identity) {
+    await requireLocalAccess();
+    if (session.agentId !== identity.agentId)
+      throw err('The selected Timechain changed. Reopen the Skills panel.', 'SKILL_AGENT_CHANGED', 409);
   }
   const pairingCode =
     options.pairingCode ||
@@ -1344,10 +1354,11 @@ export async function createApp(options = {}) {
     try {
     let message = text(input.message || (Array.isArray(input.attachments) && input.attachments.length ? 'Please examine the attached files.' : input.message), "Message");
     let nativeControl = null;
-    if (!managed && /^\/[a-z][a-z0-9_-]*(?:\s|$)/i.test(message)) {
+    const skillInvocation = !managed && /^\/skill(?:\s|$)/i.test(message);
+    if (!managed && !skillInvocation && /^\/[a-z][a-z0-9_-]*(?:\s|$)/i.test(message)) {
       assertCredentialIsolation(session.provider || {}, message);
       const identity = await nativeControlIdentity(session, true);
-        const command = await executeNativeCommand({ command: message, ...identity,
+        const command = await executeNativeCommand({ command: message, ...identity, onDisconnect,
         modelCapabilities: { reasoning: session.provider?.reasoningCapable === true } });
       if (command.kind !== "turn")
         return ( { message: { role: "assistant", agentId: record.id,
@@ -1370,7 +1381,6 @@ export async function createApp(options = {}) {
     });
     const signal = controller.signal;
     requestSession.getStore().signal = signal;
-    requestSession.getStore().originalInput = message;
     const inspected = await engine({ op: "inspect", root: record.root });
     await repairEquipment(record, inspected, { beforeTurn: true });
     if (openclaw?.sessionControls && inspected.genesis?.hash) {
@@ -1385,7 +1395,23 @@ export async function createApp(options = {}) {
       throw err("Resume the Timechain before starting or resuming a native goal.", "CHAIN_DORMANT", 409);
     if (managed && cognition.mode === "dormant") throw err("Resume the Timechain before automation can run.", "CHAIN_DORMANT", 409);
     const memoryPaused = cognition.mode === "dormant";
-    requestSession.getStore().memoryPaused = memoryPaused;
+    const scope = requestSession.getStore();
+    scope.memoryPaused = memoryPaused;
+    if (!managed && !memoryPaused && inspected.verified === true && scope.nativeIdentity) {
+      scope.agentSkillSnapshot = await agentSkills.snapshot(authorityKey(scope.nativeIdentity));
+      assertCredentialIsolation(config, scope.agentSkillSnapshot.skills);
+      assertServiceIsolation(scope.agentSkillSnapshot.skills);
+    }
+    if (skillInvocation) {
+      if (memoryPaused) throw err('Resume the Timechain to use equipped skills.', 'CHAIN_DORMANT', 409);
+      if (!scope.agentSkillSnapshot) throw err('Use the installed OpenClaw edition with a verified Timechain.', 'OPENCLAW_REQUIRED', 409);
+      const match = message.match(/^\/skill\s+([a-z0-9][a-z0-9_-]{0,63})(?:\s+([\s\S]*))?$/i);
+      if (!match) throw err('Enter /skill followed by an equipped skill name and your request.');
+      const skill = scope.agentSkillSnapshot.skills.find(item => item.name === match[1].toLowerCase());
+      if (!skill) throw err('Equip this skill in the Skills panel before invoking it.', 'SKILL_NOT_EQUIPPED', 409);
+      message = `Use the equipped skill "${skill.name}" for this turn.\n\n${match[2] || 'Ask me for any required input.'}`;
+    }
+    scope.originalInput = message;
     const forkEnabled = !memoryPaused && record.settings.fork;
     let prepared = await engine({
       op: memoryPaused ? "chat_prepare" : "prepare",
@@ -1533,7 +1559,7 @@ export async function createApp(options = {}) {
         })
       ).text;
     };
-    let replayed = Boolean(!nativeControl && cognition.supported && plan?.useReplay && route?.decision === "REPLAY" &&
+    let replayed = Boolean(!nativeControl && !scope.agentSkillSnapshot?.skills.length && cognition.supported && plan?.useReplay && route?.decision === "REPLAY" &&
       route.antecedent?.answer && !route.antecedent.truncated && !record.settings.fork);
     let candidate = text(replayed ? route.antecedent.answer : await trace.step(
       forkEnabled ? "fork" : "model", forkEnabled ? "Generate and compare perspectives" : "Generate answer", generateCandidate), "Generated answer", 1_000_000);
@@ -1604,7 +1630,7 @@ export async function createApp(options = {}) {
       );
     await requireLocalAccess();
     if (memoryPaused) {
-      return { message: { role: 'assistant', agentId: record.id, content: candidate,
+      return { message: { role: 'assistant', agentId: record.id, input: message, content: candidate,
         mode: 'dormant', memoryPaused: true, raw: false, ring: null, pending: false,
         gate: describeGate(assessment, { native: native.verdict, brightness: native.verdict?.brightness }),
         perspectives: [], attachments: (requestSession.getStore().mediaAssets || []).map(asset => asset.metadata), facultyExecution: prepared.facultyExecution, revisions,
@@ -1635,6 +1661,7 @@ export async function createApp(options = {}) {
     const response = {
       role: "assistant",
       agentId: record.id,
+      input: message,
       content: candidate,
       attachments: exchange.attachments || [],
       media: exchange.media || [],
@@ -1692,18 +1719,30 @@ export async function createApp(options = {}) {
     return automation.setEnabled(serviceOwner, params.kind, params.id, params.action === 'resume');
   }
   async function executeNativeCommand(request) {
-    const command = await openclaw.executeCommand(request);
+    const { onDisconnect, ...nativeRequest } = request;
+    const command = await openclaw.executeCommand(nativeRequest);
     if (command.kind !== 'compaction') return command;
     const scope = requestSession.getStore(), record = request.record || agentFor(scope.session);
-    const canonicalRun = await captureCanonicalSkillRunner();
-    const result = await openclaw.compact(providerFor(scope.session), { identity: request, instructions: command.instructions, signal: scope.signal }, {
-      purpose: 'candidate', root: record.root, input: request.command, loadout: keys(record.loadout), settings: record.settings,
-      nativeIdentity: { agentId: request.agentId, genesisHash: request.genesisHash },
-      signal: scope.signal, modelCapabilities: { reasoning: scope.session.provider?.reasoningCapable === true },
-      authorize: () => requestSession.run(scope, requireLocalAccess), run: callback => canonicalRun(() => requestSession.run(scope, callback)),
-      event: (ability, status, label) => scope.trace?.event(ability, status, label) });
-    return { kind: 'control', action: 'sessions.compact', text: result.compacted ? 'Native conversation compacted after PoI review.' :
-      result.reason || 'Compaction left the conversation unchanged.', result };
+    const controller = new AbortController();
+    controller.agentRoot = record.root;
+    scope.session.controllers.add(controller);
+    scope.signal = controller.signal;
+    onDisconnect?.(() => controller.abort());
+    try {
+      const canonicalRun = await captureCanonicalSkillRunner();
+      checkCancelled(scope.signal);
+      const result = await openclaw.compact(providerFor(scope.session), { identity: nativeRequest, instructions: command.instructions, signal: scope.signal }, {
+        purpose: 'candidate', root: record.root, input: request.command, loadout: keys(record.loadout), settings: record.settings,
+        nativeIdentity: { agentId: request.agentId, genesisHash: request.genesisHash },
+        signal: scope.signal, modelCapabilities: { reasoning: scope.session.provider?.reasoningCapable === true },
+        authorize: () => requestSession.run(scope, async () => { await requireLocalAccess(); checkCancelled(scope.signal); }),
+        run: callback => canonicalRun(() => requestSession.run(scope, callback)),
+        event: (ability, status, label) => scope.trace?.event(ability, status, label) });
+      return { kind: 'control', action: 'sessions.compact', text: result.compacted ? 'Native conversation compacted after PoI review.' :
+        result.reason || 'Compaction left the conversation unchanged.', result };
+    } finally {
+      scope.session.controllers.delete(controller);
+    }
   }
   async function inManagedContext(binding, callback, signal) {
     if (binding.ownerId !== serviceOwner) throw err('This local service belongs to another installation.', 'AUTOMATION_OWNER', 403);
@@ -2024,6 +2063,12 @@ export async function createApp(options = {}) {
             return send(200, {toolAuthority: toolPermissions.get(authorityKey(identity)), catalogue: await nativeCatalogueFor(identity),
               notice: 'Native tools use OpenClaw host privileges, with fresh PoI review of each model action. Scoped filesystem, browser and execution tools keep their separate permissions.'});
           }
+          if (req.method === 'GET' && url.pathname === '/api/openclaw/skills') {
+            const identity = await nativeControlIdentity(session, true);
+            const skills = await agentSkills.list(authorityKey(identity));
+            await checkSkillOwner(session, identity);
+            return send(200, { agentId: identity.agentId, canManage: session.origin === `http://${req.headers.host}`, ...skills });
+          }
           if (req.method === "GET" && url.pathname === "/api/openclaw") {
             const identity = await nativeControlIdentity(session);
             const snapshot = await openclaw.describeControls(identity.agentId ? identity : null);
@@ -2086,7 +2131,23 @@ export async function createApp(options = {}) {
               operatorCompatibility: current.operatorCompatibility, capabilities: CAPABILITIES, state: current });
           }
           if (req.method !== "POST") throw err("Not found.", "NOT_FOUND", 404);
-          const input = await body(req, url.pathname === '/api/media/upload' ? 30 * 1024 * 1024 : 16 * 1024 * 1024);
+          const input = await body(req, url.pathname === '/api/media/upload' ? 30 * 1024 * 1024
+            : url.pathname.startsWith('/api/openclaw/skills/') ? 224 * 1024 : 16 * 1024 * 1024);
+          if (['/api/openclaw/skills/import', '/api/openclaw/skills/select'].includes(url.pathname)) {
+            if (session.origin !== `http://${req.headers.host}`)
+              throw err('Manage additional skills in the local ChainChat app.', 'SKILL_LOCAL_REQUIRED', 403);
+            const identity = await nativeControlIdentity(session, true);
+            const { agentId, ...skillInput } = input;
+            if (agentId !== identity.agentId)
+              throw err('The selected Timechain changed. Reopen the Skills panel.', 'SKILL_AGENT_CHANGED', 409);
+            await checkSkillOwner(session, identity);
+            assertCredentialIsolation(session.provider || {}, skillInput);
+            assertServiceIsolation(skillInput);
+            if (url.pathname.endsWith('/import'))
+              return send(200, { skill: await agentSkills.importSkill(skillInput) });
+            const result = await exclusive(identity.record, () => agentSkills.select(authorityKey(identity), skillInput));
+            return send(200, { agentId, canManage: true, ...result });
+          }
           if (url.pathname === '/api/models/refresh') {
             if (Object.keys(input).length) throw err('Model catalogue refresh accepts no provider, key or URL.');
             return send(200, await describeModels(session, true));
@@ -2211,13 +2272,19 @@ export async function createApp(options = {}) {
             if (Object.keys(input).some(key => key !== "command")) throw err("Only a native command is accepted.");
             const command = text(input.command, "OpenClaw command", 20000);
             assertCredentialIsolation(session.provider || {}, command);
-            if (!/^\/(?:stop|goal\s+pause)\s*$/i.test(command)) await requireLocalAccess();
+            if (/^\/stop$/i.test(command)) {
+              const record = store.agents.find(agent => agent.id === session.agentId);
+              if (record) cancelAgent(record);
+              return send(200, { kind: 'host', action: 'stop', text: 'Cancellation requested.' });
+            }
+            const goalPause = /^\/goal\s+pause$/i.test(command);
+            if (!goalPause) await requireLocalAccess();
             const identity = await nativeControlIdentity(session);
-            if (/^\/stop\s*$/i.test(command)) abortSession(session);
-            if (/^\/goal\s+pause\s*$/i.test(command) && identity.record) cancelAgent(identity.record);
+            if (goalPause && identity.record) cancelAgent(identity.record);
             const execute = () => executeNativeCommand({ command, ...identity,
+              onDisconnect: callback => res.once('close', callback),
               modelCapabilities: { reasoning: session.provider?.reasoningCapable === true } });
-            const result = identity.record && !/^\/(?:stop|goal\s+pause)\s*$/i.test(command)
+            const result = identity.record && !goalPause
               ? await exclusive(identity.record, execute) : await execute();
             assertCredentialIsolation(session.provider || {}, result);
             return send(200, { ...result, state: await state(session) });

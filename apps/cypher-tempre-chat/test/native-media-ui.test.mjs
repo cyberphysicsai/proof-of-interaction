@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { composerCommand } from '../public/chat-commands.js';
 import { NATIVE_MEDIA_MAX_BYTES, nativeMediaAsset, nativeMediaFile, createNativeAttachmentQueue, nativeChatPayload,
   nativeHistoryMedia, nativeMessageMedia, verifiedNativeMedia, renderNativeMedia, mountNativeMediaComposer } from '../public/native-media.js';
 
@@ -128,17 +129,18 @@ test('the composer exposes a native-only file control and its real change handle
 
 test('the actual chat submit handler sends uploaded IDs only on native chat and blocks pending or non-native attachment sends', async () => {
   const app = await readFile(new URL('../public/app.js',import.meta.url),'utf8');
-  const start = app.indexOf('$("chatForm").addEventListener("submit"'), end = app.indexOf('$("messageInput").addEventListener("keydown"',start);
+  const start = app.indexOf('function clearComposerDraft()'), end = app.indexOf('$("messageInput").addEventListener("keydown"',start);
   assert.ok(start>=0 && end>start);
   async function run(provider, uploading=false) {
     const nodes=new Map(), $=id=>{if(!nodes.has(id))nodes.set(id,new Node('div'));return nodes.get(id);};
-    $('messageInput').value='Inspect the selected file.'; const calls=[],messages=[],notices=[];let takes=0;
-    const context={ $, requestBusy:false,token:'synthetic-local-session',state:{agent:{id:'fixture-agent'},provider},
+    $('messageInput').value='Inspect the selected file.'; $('messageInput').dispatchEvent=()=>{};
+    const calls=[],messages=[],notices=[];let takes=0;
+    const context={ $, requestBusy:false, modelSwitchBusy:false, stoppingBusy:false, token:'synthetic-local-session',state:{agent:{id:'fixture-agent'},provider},
       nativeMediaComposer:{snapshot:()=>({uploading}),sync(){},take(){takes++;return{ids:[id],assets:[asset()]};}},
-      nativeChatPayload,cognition:()=>({mode:'active'}),agentId:()=> 'fixture-agent',AbortController,
+      composerCommand,nativeChatPayload,cognition:()=>({mode:'active'}),agentId:()=> 'fixture-agent',AbortController,Event,
       addMessage:value=>messages.push(value),activity(){},toast:value=>notices.push(value),openModel(){},openDialog(){},
       api:async(route,payload,options)=>{calls.push([route,structuredClone(payload),options]);return{message:{content:'Accepted synthetic response.',gate:{approved:true},ring:{index:1}}};},
-      messageIsReviewedPause:()=>false,messageIsDormant:()=>false,renderOperationControls(){},refreshState:async()=>{},refreshActivity:async()=>{} };
+      messageIsReviewedPause:()=>false,messageIsDormant:()=>false,renderOperationControls(){},renderRuntimeActivity(){},refreshState:async()=>{},refreshActivity:async()=>{} };
     vm.createContext(context);vm.runInContext(app.slice(start,end),context);await $('chatForm').fire('submit',{preventDefault(){}});
     return{calls,messages,notices,takes};
   }

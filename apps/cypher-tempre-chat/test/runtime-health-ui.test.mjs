@@ -15,7 +15,7 @@ const response = (body, status = 200) => ({ok: status < 400, status, json: async
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => {resolve = yes; reject = no;}); return {promise, resolve, reject}; };
 
 function fixture() {
-  const nodes = new Map(), routes = new Map(); let updates = 0;
+  const nodes = new Map(), routes = new Map(); let updates = 0, toolContext;
   const node = id => {
     if (!nodes.has(id)) {
       const classes = new Set();
@@ -28,6 +28,7 @@ function fixture() {
     token: 'fixture-session', localBridgePage: true, selectedBridgePort: 8790,
     location: {origin: 'http://127.0.0.1:8790'}, bridgeApiUrl: route => route,
     fetch: route => routes.get(route)(), $: node, setupWizard: {update() {updates++;}},
+    cognition: () => ({mode: 'active'}), nativePanel: {syncConnection(value) {toolContext = value;}},
     clearLocalSession() {throw new Error('Unexpected session clearing');},
     DEFAULT_SETTINGS: {continuum: {}}, DEFAULT_COGNITION: {}, agentId: () => 'fixture-agent',
     normalizeCognition: value => value, renderState() {},
@@ -36,7 +37,7 @@ function fixture() {
   return {call: context.call, apply: context.apply, snapshot: context.snapshot, node,
     respond(route, body, status) {routes.set(route, () => Promise.resolve(response(body, status)));},
     pending(route) {const pending = deferred(); routes.set(route, () => pending.promise); return pending;},
-    updates: () => updates};
+    updates: () => updates, toolContext: () => toolContext};
 }
 
 test('actual app API and full-state merge cannot restore a dead gateway from a late healthy response', async () => {
@@ -44,11 +45,13 @@ test('actual app API and full-state merge cannot restore a dead gateway from a l
   app.respond('/initial', {agent: {id: 'fixture-agent'}, executionRuntime: ready(1)});
   app.apply(await app.call('/initial'));
   assert.equal(app.node('bridgeDot').classList.contains('online'), true);
+  assert.equal(app.toolContext().runtimeReady, true);
   const stale = app.pending('/old-state'), oldRequest = app.call('/old-state');
   app.respond('/api/activity', {activity: {}, executionRuntime: dead(2)});
   await app.call('/api/activity');
   assert.equal(app.snapshot().executionRuntime.healthy, false);
   assert.equal(app.node('bridgeDot').classList.contains('online'), false);
+  assert.equal(app.toolContext().runtimeReady, false);
   assert.match(app.node('runtimeHealthNotice').textContent, /does not confirm an out-of-memory kill/);
   const beforeLate = app.updates();
   stale.resolve(response({agent: {id: 'fixture-agent'}, executionRuntime: ready(1)}));
@@ -61,6 +64,7 @@ test('actual app API and full-state merge cannot restore a dead gateway from a l
   await app.call('/recovered');
   assert.equal(app.snapshot().executionRuntime.healthy, true);
   assert.equal(app.node('bridgeStatus').textContent, 'OPENCLAW READY');
+  assert.equal(app.toolContext().runtimeReady, true);
 });
 
 test('actual app transport failure invalidates setup readiness while late failures cannot erase recovery', async () => {

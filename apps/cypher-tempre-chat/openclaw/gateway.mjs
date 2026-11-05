@@ -603,7 +603,8 @@ export function createOpenClawGateway({ stateDir, packageRoot, nodePath = proces
       const baseConfiguration = { gateway: { mode: "local", bind: "loopback", port,
           auth: { mode: "token", token: "${CHAINCHAT_GATEWAY_TOKEN}" }, controlUi: { enabled: false },
           http: { endpoints: { chatCompletions: { enabled: true } } } },
-        agents: { defaults: { workspace, skipBootstrap: true, model: { primary: nativeSelection || "chainchat-compatible/route" },
+        // Additional skill documents enter through the owner-bound broker.
+        agents: { defaults: { workspace, skipBootstrap: true, skills: [], model: { primary: nativeSelection || "chainchat-compatible/route" },
           // Automatic utility selection is independent of per-chat provider
           // overrides; it must never silently charge a saved native profile.
           utilityModel: '',

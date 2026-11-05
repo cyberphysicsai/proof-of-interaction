@@ -41,6 +41,7 @@ export const CONTROL_GUARDS = Object.freeze({
   'agents.list': 'Additional agents require their own verified Timechain and enforcement binding.',
   'agents.entries': 'The native agent roster requires a verified Timechain and enforcement binding for each agent.',
   'agents.defaults.workspace': 'The managed workspace belongs to this installed runtime.',
+  'agents.defaults.skills': 'Equip reviewed skill documents through the ChainChat skill library.',
   'agents.defaults.cwd': 'Changing working directories requires an explicit reviewed filesystem/execution adapter.',
   'agents.defaults.repoRoot': 'Repository bootstrap reads require an explicit scoped filesystem adapter.',
   'agents.defaults.agentDir': 'Private agent state belongs to this installed runtime.',
@@ -72,6 +73,7 @@ export const CONTROL_GUARDS = Object.freeze({
   'memory.backend': 'External memory backends require scoped file/process/provider admission.',
   'memory.search': 'Native search and remote embeddings are off by default. Explicit owner opt-in can call its configured native provider independently of the chat tier.',
   'memory.qmd': 'External memory commands require a reviewed execution adapter.',
+  skills: 'Additional skill documents enter through the ChainChat skill library.',
   'skills.load': 'Additional skill paths require a scoped local installation adapter.',
   'skills.install': 'Skill installation executes native package actions and requires a reviewed adapter.',
   'skills.entries': 'Skill credentials and environment configuration require a private managed adapter.',
@@ -80,21 +82,22 @@ export const CONTROL_GUARDS = Object.freeze({
 const protectedRoots = Object.keys(CONTROL_GUARDS);
 const credentialKey = /^(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passphrase|secret|client[_-]?secret|credential|credentials|authorization|proxy[_-]?authorization|auth[_-]?token|broker[_-]?token)$/i;
 const COMMAND_ALIASES = Object.freeze({ thinking: 'think', t: 'think', reason: 'reasoning', v: 'verbose' });
-const editableRoots = new Set(['messages', 'session', 'ui', 'logging', 'agents', 'browser', 'memory', 'skills']);
+const editableRoots = new Set(['messages', 'session', 'ui', 'logging', 'agents', 'browser', 'memory']);
 const grantedConfigurationRoots = new Set(['tools', 'browser']);
 const supervisorRoots = new Set(['gateway', 'env', 'auth', 'secrets', 'update', 'discovery', 'meta']);
 const immutablePaths = Object.freeze(['gateway', 'models', 'env', 'auth', 'secrets', 'update', 'discovery', 'meta',
   'plugins.enabled', 'plugins.slots', 'plugins.load', 'plugins.allow', 'plugins.deny',
   'plugins.entries.cypher-tempre-poi', 'plugins.entries.browser',
-  'agents.defaults.workspace', 'agents.defaults.cwd', 'agents.defaults.repoRoot', 'agents.defaults.agentDir',
+  'skills', 'agents.defaults.skills', 'agents.defaults.workspace', 'agents.defaults.cwd', 'agents.defaults.repoRoot', 'agents.defaults.agentDir',
   'agents.defaults.model', 'agents.defaults.models', 'agents.defaults.modelPolicy',
   'agents.defaults.decisionModel', 'agents.defaults.imageModel', 'agents.defaults.mediaModels', 'agents.defaults.voiceModel',
   'agents.defaults.pdfModel', 'agents.defaults.authInheritance', 'agents.defaults.sessionStore',
   'agents.defaults.compaction', 'session.store', 'session.maintenance', 'logging.file', 'logging.redactSensitive', 'logging.redactPatterns',
   ...protectedRoots.filter(field => field.startsWith('browser.') || field.startsWith('tools.web.fetch.'))]);
 const matchesPath = (field, prefix) => field === prefix || field.startsWith(prefix + '.');
+const agentSkillOverride = field => /^agents\.(?:list|entries)(?:\.[^.]+)?\.skills(?:\.|$)/.test(field);
 const immutable = field => immutablePaths.some(prefix => matchesPath(field, prefix)) ||
-  /^plugins\.entries\.[^.]+\.(?:enabled|env)(?:\.|$)/.test(field);
+  agentSkillOverride(field) || /^plugins\.entries\.[^.]+\.(?:enabled|env)(?:\.|$)/.test(field);
 const admittedBelow = (snapshot, field) => snapshot?.enabled === true && snapshot.acknowledged === true &&
   Array.isArray(snapshot.settings) && snapshot.settings.some(path => path === '*' || matchesPath(path, field));
 export function nativeConfigSections(schema, { nativeCapabilities } = {}) {
@@ -116,6 +119,7 @@ export const CONTROL_COMMANDS = Object.freeze([
   ['commands', 'Show command availability and guarded settings.', 'system'],
   ['status', 'Read native Gateway and selected session status.', 'system'],
   ['goal', 'Native durable session objective: start/status/edit/pause/resume/complete/block/clear.', 'native'],
+  ['skill', 'Invoke an equipped SKILL.md on a reviewed chat turn: /skill name request.', 'native'],
   ['think', 'Set native per-session reasoning effort.', 'preference'],
   ['reasoning', 'Set native per-session reasoning display preference.', 'preference'],
   ['verbose', 'Set native per-session verbosity preference.', 'preference'],
@@ -174,7 +178,7 @@ export function validateControlPatch(patch, { allowHostConfiguration = false, na
       const field = [...trail, key].join('.');
       const nativeMedia = nativeProvider && nativeMediaPaths.some(prefix=>matchesPath(field,prefix)) && nativeSettingsAllowed(nativeCapabilities,field);
       const fixed = immutable(field) && !nativeMedia;
-      const guarded = fixed ? immutablePaths.find(prefix => matchesPath(field, prefix)) || 'plugins' :
+      const guarded = fixed ? immutablePaths.find(prefix => matchesPath(field, prefix)) || (agentSkillOverride(field) ? 'skills' : 'plugins') :
         protectedRoots.find(prefix => !(allowHostConfiguration && grantedConfigurationRoots.has(prefix)) && matchesPath(field, prefix));
       if (['__proto__', 'prototype', 'constructor'].includes(key) || credentialKey.test(key) || guarded)
         if (['__proto__', 'prototype', 'constructor'].includes(key) || credentialKey.test(key) || fixed ||
@@ -262,6 +266,7 @@ export function createNativeControls({ rpc, getRuntime, readOverlay, saveOverlay
     const known = CONTROL_COMMANDS.find(item => item.name === '/' + name);
     if (!known || known.mode === 'guarded') throw fail(known?.description || 'This native command is not exposed by the managed chat.', 'OPENCLAW_COMMAND_GUARDED', 403);
     const target = await session(identity);
+    if (name === 'skill') return { kind: 'turn', message: command.trim() };
     if (name === 'compact') {
       if (Buffer.byteLength(text) > 16000) throw fail('Compaction focus must fit within 16,000 bytes.');
       return { kind: 'compaction', sessionKey: target.key, instructions: text };
@@ -354,6 +359,19 @@ export async function readControlOverlay(directory) {
     if (!info.isFile() || info.isSymbolicLink() || info.size > 300000) throw fail('The local settings file requires inspection.');
     const value = JSON.parse(await fs.readFile(file, 'utf8'));
     if (value.version !== 1 || !/^[a-f0-9]{64}$/.test(value.revision || '')) throw fail('The local settings file is invalid.');
+    // Restore previous settings without re-enabling ambient native skills.
+    if (plain(value.patch)) {
+      delete value.patch.skills;
+      const agents = value.patch.agents;
+      if (plain(agents)) {
+        if (plain(agents.defaults)) delete agents.defaults.skills;
+        for (const roster of [agents.list, agents.entries]) {
+          if (Array.isArray(roster) || plain(roster))
+            for (const agent of Object.values(roster)) if (plain(agent)) delete agent.skills;
+          if (plain(roster)) delete roster.skills;
+        }
+      }
+    }
     // This private file contains already approved configuration, not a reusable
     // execution grant. Restore values while retaining immutable protections;
     // every later edit and native action still requires its current owner grant.
