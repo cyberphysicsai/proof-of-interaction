@@ -1,5 +1,34 @@
 # ChainChat validation
 
+## Runtime reliability and memory — 0.10.2
+
+This update fixes inherited eval-only Node flags breaking file-based database
+verification workers, removes an unnecessary controller SDK import graph, and
+requires live gateway/control/PoI readiness for the interface's connected status.
+Existing activity polling carries fixed health metadata without extra workers or
+RPCs. Stale responses cannot restore an earlier healthy display. Exact bounded
+V8 fatal-heap evidence with a matching abort is distinguished from bare SIGKILL,
+generic worker exit and startup timeout. Retrieval-stage errors preserve the
+observed runtime cause without masking provider errors, review decisions or user
+cancellation. Existing Timechains and PoI score floors are unchanged.
+
+Limited-memory Linux hosts also use the pinned SDK's existing idle-worker
+retirement subscribers under an observed-RSS application budget. Effective
+capacity includes standard cgroup ancestor limits that Node can miss. The
+unref'd sampler starts no process or RPC, does not terminate busy workers and
+does not impose a hard heap cap. Recreated workers can increase turn latency.
+This internal SDK channel and its busy-operation guards must be reviewed and
+tested again during an upstream upgrade.
+
+Regression tests cover the real pinned SQLite verifier, split/late stderr,
+generation fencing, public diagnostic redaction, runtime-caused socket failures
+and existing-chain chat with mandatory review and sealing. Final candidate,
+installer and platform results belong to the
+[0.10.2 release](https://github.com/cyberphysicsai/proof-of-interaction/releases/tag/chat-beta-v0.10.2).
+The [memory investigation](docs/runtime-memory-investigation.md) preserves its
+measured 0.10.1 baseline and exact limitations. Controlled responses establish
+integration mechanics, not answer quality or low-RAM workload guarantees.
+
 ## Guided setup — 0.10.1
 
 This update adds native installer guidance and a resumable browser setup guide.

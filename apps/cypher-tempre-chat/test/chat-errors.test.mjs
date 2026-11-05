@@ -19,7 +19,7 @@ test('provider/review compatibility failures do not masquerade as semantic rejec
     assert.equal(view.kind, 'review'); assert.equal(view.action, 'model');
     assert.notEqual(view.title, 'POI REVIEW HELD');
   }
-  assert.equal(chatFailure({ code: 'PROVIDER_INCOMPLETE', stage: 'memory-planning' }).stageLabel, 'Memory planning');
+  assert.equal(chatFailure({ code: 'PROVIDER_INCOMPLETE', stage: 'memory-planning' }).stageLabel, 'Memory retrieval planning');
   assert.equal(chatFailure({ code: 'OPENCLAW_CONTEXT_BUDGET' }).action, 'model');
   const gate = { approved: false, fruits: { kindness: 179 }, rationale: 'Held by the reviewer.' };
   const error = { code: 'COVENANT_REJECTED', gate }, before = structuredClone(error);

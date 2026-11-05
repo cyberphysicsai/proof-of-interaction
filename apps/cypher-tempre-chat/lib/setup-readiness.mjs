@@ -26,12 +26,12 @@ export function setupReadiness({ runtime, provider, agent, agentId = null, selec
     ['packaged-canonical', 'publisher-cache'].includes(canonicalSkill?.origin);
   const checks = {
     connection: { ready: true },
-    runtime: { ready: native && runtime?.running === true && runtime?.healthy !== false && runtime?.enforcementHealthy !== false,
+    runtime: { ready: native && runtime?.running === true && runtime?.healthy === true && runtime?.enforcementHealthy === true,
       configured: native, backend: native ? 'openclaw' : 'direct',
       version: label(runtime?.version, 40), running: native && runtime?.running === true,
       startOnFirstChat: false, restartOnNextChat: native && runtime?.running !== true,
       reason: !native ? 'NOT_INSTALLED' : runtime?.running !== true ? 'RUNTIME_STOPPED' :
-        runtime?.healthy === false || runtime?.enforcementHealthy === false ? 'RUNTIME_UNHEALTHY' : null },
+        runtime?.healthy !== true || runtime?.enforcementHealthy !== true ? 'RUNTIME_UNHEALTHY' : null },
     model: { ready: configured && available, configured, tier,
       provider: label(provider?.provider, 40), model: modelId,
       availability: tier === 'free' ? available ? 'available' : 'unavailable' : 'not-checked',

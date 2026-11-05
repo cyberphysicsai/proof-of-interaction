@@ -122,8 +122,14 @@ test("pinned OpenClaw preserves ChainChat conversation, gates, controls and skil
       assert.deepEqual(sealed[0].payload.labels.equipped, ["modality:2", "sense:5"]);
       assert.ok((await fs.readFile(path.join(f.root, "chain", "rings.jsonl"))).subarray(0, f.original.length).equals(f.original));
       assert.equal((await engine({ op: "verify", root: f.root })).verified, true);
-      assert.equal((await f.call("/api/status")).body.runtime.backend, "openclaw");
+      const runtime = (await f.call("/api/status")).body.runtime;
+      assert.equal(runtime.backend, "openclaw");
+      assert.equal(runtime.running, true);
+      assert.equal(runtime.healthy, true, "The real SDK client and mandatory PoI engine must both be admitted.");
+      assert.equal(runtime.enforcementHealthy, true);
+      assert.equal(runtime.healthState, "ready");
       const observed = (await f.call("/api/activity")).body;
+      assert.equal(observed.executionRuntime.healthy, true, "The lightweight poll must carry actual current runtime health.");
       const activity = observed.activity || observed;
       assert.equal(activity.running, false); assert.deepEqual(activity.activeAbilities, []);
       for (const ability of ["faculties", "gate", "seal"])

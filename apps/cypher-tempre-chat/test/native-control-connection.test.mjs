@@ -39,6 +39,15 @@ test('one authenticated hello is required and concurrent setup remains single-fl
   f.manager.invalidate();
 });
 
+test('health projection is read-only and loses readiness for a closed or obsolete owner', async () => {
+  const f = fixture();
+  assert.equal(f.manager.isReady(), false); assert.equal(f.clients.length, 0);
+  const client = await f.connect(); assert.equal(f.manager.isReady(), true);
+  assert.equal(f.clients.length, 1); assert.equal(client.requests.length, 0);
+  f.changeOwner(); assert.equal(f.manager.isReady(), false); assert.equal(f.clients.length, 1);
+  f.manager.invalidate(); assert.equal(f.manager.isReady(), false);
+});
+
 test('late stopped-client callbacks and an old run cleanup cannot abort or clear a newer run',async()=>{
   const f=fixture(),a=await f.connect();let oldClosed=0,newClosed=0;
   const oldCleanup=f.manager.subscribeClose(a,()=>oldClosed++),oldTimer=f.timers[0];
