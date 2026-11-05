@@ -266,9 +266,9 @@ selected context is sent. Keys are not published to the website.
 
 ### Install the local controller
 
-- [Windows](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.2/CypherTempre-ChainChat-Setup-0.10.2-windows-x64.exe)
-- [macOS](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.2/CypherTempre-ChainChat-Setup-0.10.2-macos.zip)
-- [Linux](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.2/CypherTempre-ChainChat-Setup-0.10.2-linux.tar.gz)
+- [Windows](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-windows-x64.exe)
+- [macOS](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-macos.zip)
+- [Linux](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-linux.tar.gz)
 
 New users follow a guided installer and local setup wizard through model selection,
 a fresh or existing Timechain, and a no-inference readiness check. The guide can be

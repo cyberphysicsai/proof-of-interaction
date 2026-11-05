@@ -39,7 +39,7 @@ async function fixture(t) {
   await engine({ op: "init", root, name: "Cypher Tempre" });
   const original = await fs.readFile(path.join(root, "chain", "rings.jsonl"));
   const requests = [], reviews = [], calls = [], diagnostics = [];
-  const state = { rejectFruit: false, alterReceiptCandidate: false };
+  const state = { rejectFruit: false, alterReceiptCandidate: false, toolPlan: null };
   const upstream = http.createServer(async (request, response) => {
     let raw = ""; for await (const chunk of request) raw += chunk;
     const body = JSON.parse(raw), content = JSON.stringify(body);
@@ -47,6 +47,18 @@ async function fixture(t) {
     requests.push({ headers: request.headers, body, utility });
     const text = utility ? PLAN : ANSWER;
     response.writeHead(200, { "content-type": "text/event-stream" });
+    if (!utility && state.toolPlan) {
+      const { name, args } = state.toolPlan;
+      state.toolPlan = null;
+      const names = new Set((body.tools || []).map(tool => tool.function?.name || tool.name));
+      const deferred = !names.has(name) && names.has("tool_call");
+      response.write(`data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture-model",
+        choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id: "ct-shell-fixture", type: "function",
+          function: { name: deferred ? "tool_call" : name, arguments: JSON.stringify(deferred ? { id: name, args } : args) } }] }, finish_reason: null }] })}\n\n`);
+      response.write(`data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture-model",
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`);
+      return response.end("data: [DONE]\n\n");
+    }
     response.write(`data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture-model",
       choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] })}\n\n`);
     response.write(`data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture-model",
@@ -189,6 +201,46 @@ test("pinned OpenClaw preserves ChainChat conversation, gates, controls and skil
       assert.equal(JSON.stringify(f.requests.at(-1).body).includes("CHAINCHAT HOST CONTRACT"), true);
       assert.deepEqual(await fs.readFile(path.join(f.root, "chain", "rings.jsonl")), before);
       ok(await f.call("/api/cognition", { mode: "active", confirm: true }));
+    });
+    await t.test("chat invokes an equipped skill and a reviewed native shell tool with independent grants", async () => {
+      const initial = await f.call("/api/openclaw/skills"); ok(initial, f);
+      const { agentId, revision } = initial.body;
+      const marker = "CHAINCHAT_SKILL_CONTEXT_FIXTURE";
+      const text = `---\nname: acceptance-fixture\ndescription: Verify the guarded chat skill path.\n---\n\nUse this fixture instruction: ${marker}\n`;
+      const saved = await f.call("/api/openclaw/skills/import", { agentId, text, acknowledged: true }); ok(saved, f);
+      const { id, sha256 } = saved.body.skill;
+      const start = f.requests.length;
+      assert.equal((await f.call("/api/chat", { message: "/skill acceptance-fixture Introduce yourself" })).status, 409);
+      assert.equal(f.requests.length, start);
+      const selected = await f.call("/api/openclaw/skills/select", { agentId, revision, skills: [{ id, sha256 }], acknowledged: true });
+      ok(selected, f);
+      assert.equal(selected.body.skills[0].status, "selected");
+      const stop = await f.call("/api/openclaw/command", { command: "/stop" }); ok(stop, f);
+      assert.equal(stop.body.action, "stop");
+      const result = await f.call("/api/chat", { message: "/skill acceptance-fixture Introduce yourself" }); ok(result, f);
+      assert.equal(result.body.message.content, ANSWER);
+      assert.equal(result.body.message.gate.approved, true);
+      const skillContext = JSON.stringify(f.requests.at(-1).body);
+      assert.ok(skillContext.includes("CHAINCHAT HOST CONTRACT"));
+      assert.ok(skillContext.includes(marker));
+      assert.equal((await f.call("/api/openclaw/tools", { enabled: true, tools: ["exec"], acknowledged: true })).status, 403);
+      ok(await f.call("/api/openclaw/tools", { enabled: true, tools: ["exec"], roots: [], networkHosts: [],
+        allowExecution: true, acknowledged: true }), f);
+      const shellMarker = "CHAINCHAT_SHELL_OUTPUT_FIXTURE";
+      f.state.toolPlan = { name: "exec", args: { command: `echo ${shellMarker}` } };
+      const beforeShell = f.requests.length, beforeReview = f.reviews.length;
+      ok(await f.call("/api/chat", { message: "Use the permitted shell tool to run the fixture echo command." }), f);
+      assert.ok(f.reviews.slice(beforeReview).some(review => review.candidate.includes("proposed-host-tool-action") &&
+        review.candidate.includes(shellMarker)), "The exact proposed command must reach PoI.");
+      const returnedOutput = f.requests.slice(beforeShell).flatMap(request => request.body.messages.filter(message => message.role === "tool"));
+      assert.ok(returnedOutput.some(message => JSON.stringify(message.content).includes(shellMarker)),
+        `Actual shell output must come back through the native tool: ${JSON.stringify(returnedOutput)}`);
+      const observed = await f.call("/api/activity"); ok(observed, f);
+      const activity = observed.body.activity || observed.body;
+      assert.ok(activity.events.some(event => event.ability === "tool" && event.status === "completed" && /exec/i.test(event.label)));
+      assert.equal(JSON.stringify(activity.events).includes(shellMarker), false, "Tool activity must omit raw parameters and results.");
+      ok(await f.call("/api/openclaw/tools", { enabled: false }), f);
+      ok(await f.call("/api/openclaw/skills/select", { agentId, revision: selected.body.revision, skills: [], acknowledged: true }), f);
     });
     await t.test("two equipped perspectives are actual model calls and collapse to one conversation ring", async () => {
       ok(await f.call("/api/settings", { fork: true, perspectives: 2, archetypes: ["2", "5"] }));

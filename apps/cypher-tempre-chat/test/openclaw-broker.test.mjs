@@ -149,7 +149,8 @@ test('a completed autonomous turn releases its session for the same owner withou
 });
 test('model context correlation supplies the managed skill but cannot bind a native run or authorize tools', async t => {
   const f = await fixture(t), capability = 'c'.repeat(64);
-  await f.register({ modelRouteCapability: capability });
+  const text = '---\nname: examples\nmetadata: PRIVATE_INSTALL_METADATA\n---\nUse a concrete example when helpful.';
+  await f.register({ modelRouteCapability: capability, additionalSkills: [{ id: 'a'.repeat(32), name: 'examples', sha256: hash(text), text }] });
   const route=await f.call('model_route',{runId:'early-selection-only'});
   assert.deepEqual(route.body.modelRoute,{transport:'proxy',provider:'chainchat-compatible',model:'route'});
   assert.equal((await f.call('tool',{runId:'early-selection-only',tool:{name:'read',callId:'unadmitted',params:{path:'private'}}})).body.allowed,false,'A route read must not bind a run or grant tools.');
@@ -158,15 +159,21 @@ test('model context correlation supplies the managed skill but cannot bind a nat
   const supplied = await f.call('model_context', { runId: correlation,model:{provider:'chainchat-compatible',model:'route'} });
   assert.equal(supplied.body.allowed, true); assert.equal(supplied.body.binding.runId, correlation);
   assert.ok(supplied.body.context.includes('CHAINCHAT HOST CONTRACT'));
+  assert.ok(supplied.body.context.indexOf('CHAINCHAT HOST CONTRACT') < supplied.body.context.indexOf('OWNER-SELECTED ADDITIONAL SKILL GUIDANCE'));
+  assert.match(supplied.body.context, /Use a concrete example when helpful/);
+  assert.doesNotMatch(supplied.body.context, /PRIVATE_INSTALL_METADATA/);
   assert.ok(supplied.body.context.includes(`[CHAINCHAT_PRIVATE_MODEL_ROUTE:${capability}]`));
   assert.equal((await f.call('tool', { runId: correlation, tool: { name: 'read', callId: 'fake', params: { path: 'private' } } })).body.allowed, false);
   assert.equal((await f.call('admit', { runId: 'actual-native-run' })).body.allowed, true, 'Context assembly must not steal claim.runId.');
+  assert.deepEqual((await f.call('prepare', { runId: 'actual-native-run' })).body.toolsAllow, []);
   assert.equal((await f.call('model_context', { sessionKey: 'other-session', runId: correlation })).body.allowed, false);
 });
 test('original browser primitives each require fresh review and compound or personal-profile calls are refused', async t => {
   let reviews = 0, effects = 0;
+  const events = [];
   const f = await fixture(t, { assessment: () => { const result = good(); if (++reviews === 2) result.fruitages.kindness = 20; return result; } });
   await f.register({ input: 'Click Continue, then click Finish in the owned browser.',
+    event: (...event) => events.push(event),
     toolAuthority: { enabled: true, acknowledged: true, tools: ['browser'], roots: [], networkHosts: ['example.com'], allowExecution: false },
     browserInvocation: {
       describe: () => ({ profile: 'chainchat-owned', isolated: true, running: true, closed: false }),
@@ -182,11 +189,13 @@ test('original browser primitives each require fresh review and compound or pers
   assert.equal((await invoke('multi-field', { action: 'act', request: { kind: 'fill', fields: [{ ref: 'a', value: 'one' }, { ref: 'b', value: 'two' }] } })).body.allowed, false);
   const first = await invoke('native-primitive-one', children[0]);
   assert.equal(first.body.allowed, true, JSON.stringify(first.body)); effects++;
+  assert.deepEqual(events.filter(([ability]) => ability === 'tool'), [], 'Approval does not establish execution.');
   assert.equal((await invoke('native-primitive-one', children[0])).body.allowed, false, 'An approved call identifier cannot be replayed.');
   await f.call('tool_result', { tool: { name: 'browser', callId: 'native-primitive-one' }, outcome: { success: true, result: { clicked: 'Continue' }, error: null } });
   const denied = await invoke('native-primitive-two', children[1]);
   if (denied.body.allowed) effects++;
   assert.equal(denied.body.allowed, false); assert.equal(effects, 1); assert.equal(reviews, 2);
+  assert.deepEqual(events.filter(([ability]) => ability === 'tool'), [['tool', 'completed', 'Tool browser completed']]);
   assert.equal((await engine({ op: 'inspect', root: f.root })).head.index, 0);
 });
 test('managed model services require a fresh exact one-use approved native call', async t => {

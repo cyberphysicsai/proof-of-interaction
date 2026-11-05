@@ -162,6 +162,25 @@ test('approved native configuration survives restart without persisting executio
   await assert.rejects(readControlOverlay(directory), { code: 'OPENCLAW_SETTING_GUARDED' });
 });
 
+test('native settings cannot bypass the reviewed skill library, including a previous stored overlay', async t => {
+  const options = { nativeCapabilities: { enabled: true, acknowledged: true, settings: ['*'] } };
+  const defaults = { thinkingDefault: 'high', skills: ['ambient'] };
+  const list = [{ id: 'main', skills: ['ambient'] }];
+  const entries = { other: { skills: ['ambient'] } };
+  const skills = { load: { extraDirs: ['/unreviewed'] } };
+  for (const patch of [{ skills }, { agents: { defaults } }, { agents: { list } }, { agents: { entries } }])
+    assert.throws(() => validateControlPatch(patch, options), { code: 'OPENCLAW_SETTING_GUARDED' });
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ct-legacy-skill-overlay-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'controls.json');
+  const revision = 'b'.repeat(64);
+  const stored = JSON.stringify({ version: 1, revision, patch: { skills, agents: { defaults, list, entries } } });
+  await fs.writeFile(file, stored);
+  assert.deepEqual(await readControlOverlay(directory), { revision,
+    patch: { agents: { defaults: { thinkingDefault: 'high' }, list: [{ id: 'main' }], entries: { other: {} } } } });
+  assert.equal(await fs.readFile(file, 'utf8'), stored);
+});
+
 test('tool discovery uses the actual native catalogue and saved-session preview without granting tools', async () => {
   const calls = [], controls = createNativeControls({ rpc: async (method, params) => {
     calls.push([method, params]);
