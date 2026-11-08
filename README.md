@@ -235,47 +235,5 @@ never replace them with files from a download or commit them to a public reposit
 
 ## Cypher Tempre ChainChat
 
-[ChainChat](apps/cypher-tempre-chat) is the local OpenClaw controller for this
-repository's Proof of Interaction skill. Use the full-width chat and ability bar,
-equip faculties, inspect the Timechain, and manage native OpenClaw settings from
-one interface. Pausing real-time memory keeps PoI review required.
-
-OpenClaw's original npm archive keeps its official integrity digest. A narrowly
-attested compatibility overlay forwards the existing native `inputProvenance`
-and `currentSourceTurnId` fields to the same two early hook contexts in the
-extracted runtime. The latter carries the framework's original client nonce;
-exact before/after hashes
-are checked during setup and doctor validation on each supported OS. Model,
-action and safety logic are unchanged by this overlay. Completion text alone
-grants no authority. Nonce metadata correlates queued requests without accepting
-prompt text or a transport acknowledgment as proof. The separate canonical 69-file PoI skill bundle remains
-byte-identical to its maintained source.
-
-The application includes an exact, verified snapshot of the canonical OpenClaw
-bundle for offline startup. Its fixed-publisher updater discovers this
-repository's `main` branch, verifies Git object hashes, tests a complete candidate
-in an isolated fixture and switches only between turns. User chains, registries,
-credentials and local approvals stay outside the downloaded skill code. Git
-hashes attest the publisher snapshot; they are not a cryptographic publisher
-signature.
-
-Choose a model configured in local OpenClaw, connect your own API, or select an
-advertised free model when available. Shared access has provider limits;
-OpenRouter entries require your own key. Model privacy notices explain where
-selected context is sent. Keys are not published to the website.
-
-### Install the local controller
-
-- [Windows](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-windows-x64.exe)
-- [macOS](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-macos.zip)
-- [Linux](https://github.com/cyberphysicsai/proof-of-interaction/releases/download/chat-beta-v0.10.3/CypherTempre-ChainChat-Setup-0.10.3-linux.tar.gz)
-
-New users follow a guided installer and local setup wizard through model selection,
-a fresh or existing Timechain, and a no-inference readiness check. The guide can be
-reopened from the top of the chat; existing configured users can keep chatting.
-
-This repository is the maintained source for both the skill and controller.
-[cyphertempre.ai](https://cyphertempre.ai/) serves the same reviewed frontend as
-a static deployment mirror; the agent and its authenticated runtime execute
-locally. See the [application README](apps/cypher-tempre-chat/README.md) for model,
-native capability and installation details.
+ChainChat is the local OpenClaw app that uses this skill. Find its source,
+installers, and setup guide in the [ChainChat repository](https://github.com/cyberphysicsai/chainchat).
